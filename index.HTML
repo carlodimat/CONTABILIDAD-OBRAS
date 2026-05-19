@@ -1,0 +1,2279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Interactivo - PROCODIMA</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <!-- Parser y Exportadores -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <!-- Iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        th { user-select: none; }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden">
+
+    <!-- NUEVO: GESTOR DE PROYECTOS -->
+    <div class="bg-slate-900 text-white shadow-md border-b border-slate-700 z-20 relative px-4 py-2 flex flex-col sm:flex-row justify-between items-center text-sm gap-2">
+        <div class="flex items-center space-x-3 w-full sm:w-auto">
+            <i class="fa-solid fa-folder-tree text-indigo-400 text-lg"></i>
+            <span class="font-bold tracking-widest text-slate-300">MIS OBRAS:</span>
+            <select id="obraSelector" onchange="window.cambiarObra()" class="bg-slate-800 border border-slate-600 text-white font-bold rounded px-3 py-1.5 outline-none focus:border-indigo-500 w-full sm:w-auto">
+                <!-- Se llena por JavaScript -->
+            </select>
+            <button onclick="window.eliminarObraActual()" class="text-red-400 hover:text-red-300 px-3 bg-slate-800 border border-slate-600 rounded py-1.5 shadow transition" title="Eliminar Obra Actual"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <div class="flex items-center space-x-2 w-full sm:w-auto">
+            <input type="text" id="nuevaObraNombre" placeholder="Nombre nueva obra..." class="bg-slate-800 border border-slate-600 text-white px-3 py-1.5 rounded outline-none focus:border-indigo-500 w-full sm:w-auto">
+            <button onclick="window.crearNuevaObra()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded shadow transition font-bold whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i> Crear</button>
+        </div>
+    </div>
+
+    <!-- BARRA SUPERIOR -->
+    <nav class="bg-indigo-900 text-white shadow-lg z-10 relative">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-chart-pie text-2xl text-indigo-300"></i>
+                <div class="flex flex-col justify-center">
+                    <div class="flex items-baseline space-x-1">
+                        <span id="companyName" class="font-bold text-xl tracking-wider cursor-text border-b border-dashed border-transparent hover:border-indigo-300 transition px-1 rounded hover:bg-indigo-800 focus:bg-indigo-800 focus:outline-none" contenteditable="true" title="Editar Empresa">EMPRESA C.A.</span>
+                        <i class="fa-solid fa-pen text-[10px] text-indigo-400 ml-1 mb-1"></i>
+                    </div>
+                    <div class="flex items-baseline space-x-1 mt-0.5">
+                        <span class="text-indigo-300 font-light text-sm mr-1">Obra:</span>
+                        <span id="projectName" class="text-indigo-100 font-medium text-sm cursor-text border-b border-dashed border-transparent hover:border-indigo-300 transition px-1 rounded hover:bg-indigo-800 focus:bg-indigo-800 focus:outline-none" contenteditable="true" title="Editar Obra">NOMBRE DE LA OBRA</span>
+                        <i class="fa-solid fa-pen text-[10px] text-indigo-400 ml-1"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="text-sm bg-indigo-800 px-3 py-1 rounded-full border border-indigo-700 hidden md:block"><i class="fa-solid fa-circle-info mr-1"></i> Dashboard Administrativo</div>
+        </div>
+    </nav>
+
+    <!-- ÁREA PRINCIPAL -->
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 relative">
+        <div class="max-w-7xl mx-auto space-y-6">
+            
+            <!-- SECCIÓN DE CARGA -->
+            <div class="glass-card p-6 border border-gray-100" id="uploadSection">
+                <div class="text-center py-8">
+                    <div class="mb-4"><i class="fa-solid fa-file-csv text-6xl text-indigo-400"></i></div>
+                    <h2 class="text-2xl font-bold text-gray-700 mb-2">Carga tu Base de Datos</h2>
+                    <p class="text-gray-500 mb-6">Sube tu archivo CSV maestro o comienza desde cero.</p>
+                    <div class="flex flex-col sm:flex-row justify-center gap-4">
+                        <button onclick="document.getElementById('csvFileInput').click()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition shadow-md inline-flex items-center space-x-2">
+                            <i class="fa-solid fa-upload"></i><span>Cargar CSV</span>
+                        </button>
+                        <button onclick="window.startEmptyDatabase()" class="bg-white border-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-semibold py-3 px-6 rounded-lg transition shadow-sm inline-flex items-center space-x-2">
+                            <i class="fa-solid fa-file-circle-plus"></i><span>Comenzar en Blanco</span>
+                        </button>
+                    </div>
+                    <input type="file" id="csvFileInput" accept=".csv" class="hidden">
+                </div>
+            </div>
+
+            <!-- CONTROLES -->
+            <div id="filtersSection" class="hidden">
+                <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 pb-4 border-b border-gray-200 gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-filter text-indigo-500 mr-2"></i>Controles del Dashboard</h2>
+                        <p class="text-sm text-gray-500" id="recordCountDisplay"></p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <button onclick="window.toggleViewModePeriod()" class="text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 py-2 px-4 rounded border border-blue-200" id="btnViewModePeriodTop"><i class="fa-solid fa-calendar-week mr-2"></i> Vista: Mensual</button>
+                        <div class="w-px bg-gray-300 mx-1 h-6 hidden sm:block"></div>
+                        <button onclick="window.openM('searchModal'); document.getElementById('globalSearchInput').value=''; window.executeSearch('');" class="text-sm bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded shadow font-bold"><i class="fa-solid fa-search"></i> Buscar</button>
+                        <button onclick="window.openAddIngresoModal()" class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-3 rounded shadow"><i class="fa-solid fa-plus"></i> Ingreso</button>
+                        <button onclick="window.openAddRecordModal()" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded shadow"><i class="fa-solid fa-plus"></i> Gasto</button>
+                        <button onclick="window.openContratoModal()" class="text-sm bg-amber-500 hover:bg-amber-600 text-white py-2 px-3 rounded shadow"><i class="fa-solid fa-file-contract"></i> Contrato</button>
+                        <button onclick="window.openBudgetModal()" class="text-sm bg-purple-600 hover:bg-purple-700 text-white py-2 px-3 rounded shadow"><i class="fa-solid fa-bullseye"></i> Presupuesto</button>
+                        <div class="w-px bg-gray-300 mx-1 h-6 hidden sm:block"></div>
+                        <button onclick="window.resetFilters()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded"><i class="fa-solid fa-rotate-right"></i></button>
+                        <button onclick="window.exportToCSV()" class="text-sm bg-gray-500 hover:bg-gray-600 text-white py-2 px-3 rounded shadow" title="Guardar CSV"><i class="fa-solid fa-save mr-1"></i> Respaldar</button>
+                        <button onclick="window.exportToExcel()" class="text-sm bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded shadow" title="Exportar a Excel"><i class="fa-solid fa-file-excel"></i> Excel</button>
+                        <button onclick="window.exportFilteredExpensesPDF()" class="text-sm bg-slate-600 hover:bg-slate-700 text-white py-2 px-4 rounded shadow font-bold" title="Reporte de Gastos Filtrados"><i class="fa-solid fa-file-lines mr-1"></i> Reporte de Gastos</button>
+                        <button onclick="window.exportMasterPDF()" class="text-sm bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded shadow font-bold" title="Reporte Maestro en PDF"><i class="fa-solid fa-file-pdf mr-1"></i> Reporte Maestro</button>
+                        <button onclick="window.openM('bulkPasteModal')" class="text-sm bg-purple-700 hover:bg-purple-800 text-white py-2 px-4 rounded shadow font-black" title="Migrador Mágico (Excel)"><i class="fa-solid fa-rocket mr-1"></i> MIGRER</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    <div><label id="periodFilterLabel" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Mes</label><select id="periodFilter" onchange="window.applyFilters()" class="w-full border border-gray-300 rounded py-2 px-3"><option value="ALL">Todos</option></select></div>
+                    <div><label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tipo Gasto</label><select id="typeFilter" onchange="window.applyFilters()" class="w-full border border-gray-300 rounded py-2 px-3"><option value="ALL">Todos</option></select></div>
+                    <div><label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Área / Disc</label><select id="areaFilter" onchange="window.applyFilters()" class="w-full border border-gray-300 rounded py-2 px-3"><option value="ALL">Todas</option></select></div>
+                    <div><label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Proveedor</label><select id="providerFilter" onchange="window.applyFilters()" class="w-full border border-gray-300 rounded py-2 px-3"><option value="ALL">Todos</option></select></div>
+                    <div><label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estado Gasto</label><select id="estadoFilter" onchange="window.applyFilters()" class="w-full border border-gray-300 rounded py-2 px-3"><option value="ALL">Todos</option><option value="PAGADO">Pagados</option><option value="PENDIENTE">Pendientes</option></select></div>
+                    <div><label class="block text-xs font-semibold text-indigo-600 uppercase mb-1">% Admin</label><input type="number" id="adminFeeInput" value="10" min="0" step="0.5" class="w-full bg-indigo-50 border border-indigo-200 text-indigo-700 py-2 px-3 rounded font-bold" oninput="window.applyFilters(); window.backupLocal();"></div>
+                </div>
+            </div>
+
+            <!-- DATOS PRINCIPALES -->
+            <div id="dashboardContent" class="hidden space-y-6">
+
+                <!-- ANÁLISIS M2 -->
+                <div class="glass-card p-5 border-l-4 border-sky-500 bg-sky-50/40">
+                    <h3 class="text-md font-bold text-sky-800 mb-3 flex items-center"><i class="fa-solid fa-ruler-combined mr-2 text-sky-500"></i>Análisis Analítico por Metro Cuadrado (m²)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+                        <div><label class="block text-[10px] font-bold text-sky-700 uppercase mb-1">Área (m²)</label><input type="number" id="inputAreaM2" value="100" class="w-full border border-sky-200 py-2 px-3 rounded font-black shadow-sm" oninput="window.updateM2Metrics(); window.backupLocal();"></div>
+                        <div><label class="block text-[10px] font-bold text-sky-700 uppercase mb-1">Estimado Base ($/m²)</label><input type="number" id="inputEstPriceM2" value="0" class="w-full border border-sky-200 py-2 px-3 rounded font-black shadow-sm" oninput="window.updateM2Metrics(); window.backupLocal();"></div>
+                        <div class="bg-white p-3 rounded border border-sky-100 shadow-sm relative"><p class="text-[10px] font-bold text-gray-500 uppercase">Presupuesto Global</p><p class="text-xl font-black text-gray-800 mt-1" id="m2PresupuestoTotal">$0.00</p><p class="text-[9px] text-gray-400 mt-1">Justificado: <span id="m2JustificadoTotal" class="font-bold text-purple-600">$0.00</span></p></div>
+                        <div class="bg-white p-3 rounded border border-sky-100 shadow-sm relative overflow-hidden"><p class="text-[10px] font-bold text-gray-500 uppercase">Costo Real/m²</p><p class="text-xl font-black text-gray-800 mt-1" id="m2CostoReal">$0.00</p><div id="m2StatusIndicator" class="absolute bottom-0 left-0 w-full h-1.5 bg-sky-500"></div></div>
+                        <div class="bg-white p-3 rounded border border-sky-100 shadow-sm relative overflow-hidden" id="m2PctCard"><p class="text-[10px] font-bold text-gray-500 uppercase">% Ejecutado</p><p class="text-xl font-black text-gray-800 mt-1" id="m2PctVariacion">0.00%</p><div id="m2PctIndicator" class="absolute bottom-0 left-0 w-full h-1.5 bg-sky-500"></div></div>
+                    </div>
+                </div>
+
+                <!-- PRESUPUESTOS -->
+                <div class="glass-card p-6">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+                        <h3 class="text-lg font-bold text-purple-700 flex items-center"><i class="fa-solid fa-bullseye mr-2 text-purple-500"></i>Presupuestos Estimados por Área</h3>
+                        <button onclick="window.openBudgetModal()" class="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 px-3 py-1.5 rounded transition border border-purple-200 flex items-center"><i class="fa-solid fa-plus mr-1"></i> Añadir</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b">Área / Disciplina</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right">Presupuesto Estimado</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right">Monto Ejecutado</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right">Saldo Disponible</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right">% Consumido</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b w-1/4">Progreso</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="budgetTableBody" class="text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- CONTRATOS -->
+                <div class="glass-card p-6 border-l-4 border-amber-500">
+                    <div class="flex justify-between items-center mb-4 border-b border-amber-100 pb-3">
+                        <h3 class="text-lg font-bold text-amber-700 flex items-center"><i class="fa-solid fa-file-contract mr-2 text-amber-500"></i>Control de Contratos (Subcontratistas)</h3>
+                        <button onclick="window.openContratoModal()" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded transition shadow-sm flex items-center"><i class="fa-solid fa-plus mr-1"></i> Contrato</button>
+                    </div>
+                    <div class="overflow-x-auto max-h-[300px] overflow-y-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="sticky top-0 bg-white shadow-sm z-10">
+                                <tr>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b">Subcontratista</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right">Total Contratado</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right">Total Pagado</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right">Saldo Contrato</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b w-[150px]">Avance de Pagos</th>
+                                </tr>
+                            </thead>
+                            <tbody id="contratosTableBody" class="text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- KPI GLOBALES -->
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div class="glass-card p-4 border-l-4 border-emerald-500 bg-emerald-50/40">
+                        <div class="flex items-center mb-1"><i class="fa-solid fa-arrow-trend-up text-emerald-500 mr-2 text-sm"></i><p class="text-[10px] font-bold text-emerald-700 uppercase">Ingresos</p></div>
+                        <p class="text-xl xl:text-2xl font-black text-emerald-800" id="kpiTotalIngresosHist">$0.00</p>
+                    </div>
+                    <div class="glass-card p-4 border-l-4 border-slate-500 bg-slate-50/40">
+                        <div class="flex items-center mb-1"><i class="fa-solid fa-hammer text-slate-500 mr-2 text-sm"></i><p class="text-[10px] font-bold text-slate-700 uppercase">Egresos Netos</p></div>
+                        <p class="text-xl xl:text-2xl font-black text-slate-800" id="kpiTotalEgresosNetosHist">$0.00</p>
+                    </div>
+                    <div class="glass-card p-4 border-l-4 border-amber-500 bg-amber-50/40">
+                        <div class="flex items-center mb-1"><i class="fa-solid fa-user-tie text-amber-500 mr-2 text-sm"></i><p class="text-[10px] font-bold text-amber-700 uppercase">Admin. Delegada</p></div>
+                        <p class="text-xl xl:text-2xl font-black text-amber-800" id="kpiTotalEgresosAdminHist">$0.00</p>
+                    </div>
+                    <div class="glass-card p-4 border-l-4 border-rose-500 bg-rose-50/40">
+                        <div class="flex items-center mb-1"><i class="fa-solid fa-chart-pie text-rose-500 mr-2 text-sm"></i><p class="text-[10px] font-bold text-rose-700 uppercase">Costo Total Obra</p></div>
+                        <p class="text-xl xl:text-2xl font-black text-rose-800" id="kpiTotalEgresosHist">$0.00</p>
+                        <div class="flex justify-between mt-2 text-[9px] text-gray-600 border-t border-rose-200/50 pt-1"><span>Pagado: <span id="kpiTotalPagado" class="font-bold text-emerald-600"></span></span><span>Por Pagar: <span id="kpiTotalPorPagar" class="font-bold text-red-600"></span></span></div>
+                    </div>
+                    <div class="glass-card p-4 border-l-4 border-indigo-500 bg-indigo-50/40">
+                        <div class="flex items-center mb-1"><i class="fa-solid fa-vault text-indigo-500 mr-2 text-sm"></i><p class="text-[10px] font-bold text-indigo-700 uppercase">Saldo en Caja</p></div>
+                        <p class="text-xl xl:text-2xl font-black text-indigo-800" id="kpiBalanceHist">$0.00</p>
+                    </div>
+                </div>
+
+                <!-- INGRESOS -->
+                <div class="glass-card p-6">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+                        <h3 class="text-lg font-bold text-emerald-700 flex items-center"><i class="fa-solid fa-hand-holding-dollar mr-2 text-emerald-500"></i>Control de Ingresos</h3>
+                    </div>
+                    <div class="overflow-x-auto max-h-[300px] overflow-y-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="sticky top-0 bg-white shadow-sm z-10">
+                                <tr>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b w-[90px]">Periodo</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b">Origen</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b">Descripción</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b">F. Pago</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-center">Soporte</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right bg-gray-50">Orig.</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right bg-gray-50">Tasa</th>
+                                    <th class="py-2 px-3 text-[10px] text-emerald-700 uppercase border-b text-right bg-emerald-50">USD</th>
+                                    <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ingresosTableBody" class="text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- DEUDAS -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="glass-card p-6 lg:col-span-2">
+                        <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+                            <h3 class="text-lg font-bold text-red-700 flex items-center"><i class="fa-solid fa-file-invoice-dollar mr-2 text-red-500"></i>Cuentas por Pagar (Gastos Pendientes)</h3>
+                            <button onclick="window.exportDeudasPDF()" class="text-xs bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 rounded transition border border-red-200 flex items-center"><i class="fa-solid fa-file-pdf mr-1"></i> PDF</button>
+                        </div>
+                        <div class="overflow-x-auto max-h-[300px] overflow-y-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="sticky top-0 bg-white shadow-sm z-10">
+                                    <tr>
+                                        <th class="py-2 px-2 text-[10px] text-gray-500 uppercase border-b w-[90px]">Fecha</th>
+                                        <th class="py-2 px-2 text-[10px] text-gray-500 uppercase border-b">Proveedor</th>
+                                        <th class="py-2 px-2 text-[10px] text-gray-500 uppercase border-b">Descripción</th>
+                                        <th class="py-2 px-2 text-[10px] text-gray-500 uppercase border-b text-right bg-gray-50">Total</th>
+                                        <th class="py-2 px-2 text-[10px] text-emerald-600 uppercase border-b text-right bg-emerald-50">Pagado</th>
+                                        <th class="py-2 px-2 text-[10px] text-red-700 uppercase border-b text-right bg-red-50">Saldo Pend.</th>
+                                        <th class="py-2 px-2 text-[10px] text-gray-500 uppercase border-b text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="deudasTableBody" class="text-sm"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="glass-card p-6 flex flex-col">
+                        <h3 class="text-md font-bold text-gray-700 mb-2"><i class="fa-solid fa-chart-pie text-red-500 mr-2"></i>Deuda por Proveedor</h3>
+                        <div class="chart-container flex-1" style="min-height: 200px;"><canvas id="deudaChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- GRÁFICOS PRINCIPALES -->
+                <div id="chartsGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="glass-card p-6 col-span-1 lg:col-span-2">
+                        <div class="flex flex-col sm:flex-row justify-between mb-4 gap-2">
+                            <h3 class="text-lg font-bold text-gray-700"><i class="fa-solid fa-chart-line text-indigo-500 mr-2"></i>Evolución Financiera</h3>
+                            <div class="flex gap-2 items-center">
+                                <button onclick="window.toggleViewModePeriod()" class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 py-1.5 px-3 rounded border border-blue-200" id="btnViewModePeriodChart"><i class="fa-solid fa-calendar-week mr-1"></i> Vista: Mensual</button>
+                                <div class="w-px bg-gray-300 mx-1 h-4 hidden sm:block"></div>
+                                <button onclick="window.exportSpecificChartToPDF('trendChart', 'Evolucion Financiera')" class="text-xs bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 rounded border border-red-200"><i class="fa-solid fa-file-pdf mr-1"></i> PDF</button>
+                                <button onclick="window.toggleChartMode()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded border border-indigo-200" id="btnChartMode"><i class="fa-solid fa-chart-area mr-1"></i> Acumulado</button>
+                            </div>
+                        </div>
+                        <div class="chart-container" style="height: 350px;"><canvas id="trendChart"></canvas></div>
+                    </div>
+                    <div class="glass-card p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold text-gray-700"><i class="fa-solid fa-chart-bar text-indigo-500 mr-2"></i>Gasto por Tipo</h3>
+                            <button onclick="window.exportSpecificChartToPDF('typeChart', 'Gasto por Categoria')" class="text-xs bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 rounded border border-red-200"><i class="fa-solid fa-file-pdf mr-1"></i> PDF</button>
+                        </div>
+                        <div class="chart-container" id="typeChartContainer"><canvas id="typeChart"></canvas></div>
+                    </div>
+                    <div class="glass-card p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold text-gray-700"><i class="fa-solid fa-layer-group text-indigo-500 mr-2"></i>Distribución por Área</h3>
+                            <button onclick="window.exportSpecificChartToPDF('areaChart', 'Gastos por Area')" class="text-xs bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 rounded border border-red-200"><i class="fa-solid fa-file-pdf mr-1"></i> PDF</button>
+                        </div>
+                        <div class="overflow-y-auto pr-2" style="height: 300px;">
+                            <div id="areaChartContainer" class="relative w-full"><canvas id="areaChart"></canvas></div>
+                        </div>
+                    </div>
+                    
+                    <!-- NUEVO GRÁFICO: PROVEEDORES -->
+                    <div class="glass-card p-6 col-span-1 lg:col-span-2">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold text-gray-700"><i class="fa-solid fa-truck-fast text-indigo-500 mr-2"></i>Gasto por Proveedor</h3>
+                            <button onclick="window.exportSpecificChartToPDF('providerChart', 'Gastos por Proveedor')" class="text-xs bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 rounded border border-red-200"><i class="fa-solid fa-file-pdf mr-1"></i> PDF</button>
+                        </div>
+                        <div class="overflow-y-auto pr-2" style="max-height: 400px;">
+                            <div id="providerChartContainer" class="relative w-full"><canvas id="providerChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PROVEEDORES -->
+                <div class="glass-card p-6">
+                    <div class="flex justify-between items-center mb-4 gap-4">
+                        <h3 class="text-lg font-bold text-gray-700"><i class="fa-solid fa-list-check text-rose-500 mr-2"></i>Proveedores (Gastos Registrados)</h3>
+                        <input type="text" id="providerSearchInput" placeholder="Buscar..." class="w-full md:w-64 px-3 py-2 rounded border border-gray-300 text-sm" oninput="window.renderProviderTable(this.value)">
+                    </div>
+                    <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="sticky top-0 bg-white shadow-md z-10">
+                                <tr>
+                                    <th class="py-3 px-3 text-xs text-gray-600 border-b cursor-pointer hover:bg-gray-50" onclick="window.toggleSort('name')">Proveedor <i class="fa-solid fa-sort ml-1 text-gray-400" id="sortIconName"></i></th>
+                                    <th class="py-3 px-3 text-xs text-gray-600 border-b cursor-pointer text-right" onclick="window.toggleSort('value')">Monto Neto ($) <i class="fa-solid fa-sort-down ml-1 text-rose-500" id="sortIconValue"></i></th>
+                                    <th class="py-3 px-3 text-xs text-gray-600 border-b text-right">Deuda Pendiente</th>
+                                    <th class="py-3 px-3 text-xs text-gray-600 border-b text-right">% Periodo</th>
+                                    <th class="py-3 px-3 text-xs text-gray-600 border-b w-1/3">Proporción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="proveedoresTableBody" class="text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- NOTIFICACIONES TOAST -->
+    <div id="toastNotification" class="fixed bottom-5 right-5 text-white px-4 py-3 rounded shadow-lg transition-opacity z-50 flex items-center opacity-0 pointer-events-none">
+        <i id="toastIcon" class="fa-solid mr-2"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- DATALISTS -->
+    <datalist id="provList"></datalist>
+    <datalist id="tipoList"></datalist>
+    <datalist id="areaList"></datalist>
+    <datalist id="ingOrigenList"></datalist>
+    <datalist id="pagoList">
+        <option value="TRANSFERENCIA BANCARIA"></option>
+        <option value="ZELLE"></option>
+        <option value="EFECTIVO"></option>
+    </datalist>
+
+    <!-- MODALES DE FORMULARIOS -->
+    <div id="budgetModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="budgetModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[90%] max-w-md transform transition-transform scale-95">
+            <div class="flex justify-between items-center mb-4 border-b border-purple-100 pb-3">
+                <h3 class="text-xl font-bold text-purple-800"><i class="fa-solid fa-bullseye mr-2"></i>Presupuesto por Área</h3>
+                <button onclick="window.closeM('budgetModal')"><i class="fa-solid fa-xmark text-lg text-gray-400"></i></button>
+            </div>
+            <div class="space-y-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Área / Disciplina</label>
+                    <input type="text" id="budgetArea" list="areaList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-purple-700 uppercase mb-1">Monto Asignado (USD)</label>
+                    <input type="number" id="budgetMonto" step="0.01" class="w-full border border-purple-300 bg-purple-50 rounded px-3 py-2 text-lg font-bold text-purple-900" placeholder="0.00">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-100">
+                <button onclick="window.closeM('budgetModal')" class="px-4 py-2 bg-gray-100 rounded text-sm">Cancelar</button>
+                <button onclick="window.saveBudget()" class="px-5 py-2 text-white bg-purple-600 rounded text-sm font-bold">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="contratoModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="contratoModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[90%] max-w-md transform transition-transform scale-95">
+            <div class="flex justify-between items-center mb-4 border-b border-amber-100 pb-3">
+                <h3 class="text-xl font-bold text-amber-800"><i class="fa-solid fa-file-contract mr-2"></i>Registrar Contrato</h3>
+                <button onclick="window.closeM('contratoModal')"><i class="fa-solid fa-xmark text-lg text-gray-400"></i></button>
+            </div>
+            <input type="hidden" id="editCtrId">
+            <div class="space-y-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Fecha</label>
+                    <input type="date" id="ctrFecha" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Subcontratista</label>
+                    <input type="text" id="ctrProveedor" list="provList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Descripción</label>
+                    <input type="text" id="ctrDesc" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-amber-700 uppercase mb-1">Total Contratado (USD)</label>
+                    <input type="number" id="ctrMonto" step="0.01" class="w-full border border-amber-300 bg-amber-50 rounded px-3 py-2 text-lg font-bold text-amber-900" placeholder="0.00">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-100">
+                <button onclick="window.closeM('contratoModal')" class="px-4 py-2 bg-gray-100 rounded text-sm">Cancelar</button>
+                <button onclick="window.saveContrato()" class="px-5 py-2 text-white bg-amber-600 rounded text-sm font-bold">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="searchModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="searchModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[90%] max-w-4xl transform transition-transform scale-95 flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center mb-4 border-b border-blue-100 pb-3">
+                <h3 class="text-xl font-bold text-blue-800"><i class="fa-solid fa-magnifying-glass mr-2"></i>Buscador Avanzado</h3>
+                <button onclick="window.closeM('searchModal')"><i class="fa-solid fa-xmark text-lg text-gray-400"></i></button>
+            </div>
+            <div class="mb-4">
+                <input type="text" id="globalSearchInput" oninput="window.executeSearch(this.value)" class="w-full border border-blue-300 rounded-lg px-4 py-3 text-sm focus:ring-blue-500 font-medium" placeholder="Buscar palabras en descripciones (ej. 'cemento')...">
+            </div>
+            <div class="overflow-x-auto flex-1 overflow-y-auto border border-gray-200 rounded">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-gray-100 shadow-sm z-10">
+                        <tr>
+                            <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b w-[90px]">Fecha</th>
+                            <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b w-[80px]">Tipo</th>
+                            <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b">Origen/Prov.</th>
+                            <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b">Descripción</th>
+                            <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-right">Monto USD</th>
+                            <th class="py-2 px-3 text-[10px] text-gray-500 uppercase border-b text-center">Edición</th>
+                        </tr>
+                    </thead>
+                    <tbody id="searchResultsBody" class="text-sm">
+                        <tr><td colspan="6" class="py-4 text-center text-gray-500">Escribe para buscar.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 pt-3 border-t border-gray-200 flex justify-between items-center bg-gray-50 p-3 rounded font-bold text-sm" id="searchTotalAmount"></div>
+        </div>
+    </div>
+
+    <div id="abonoModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="abonoModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[90%] max-w-lg transform transition-transform scale-95">
+            <div class="flex justify-between items-center mb-4 border-b border-sky-100 pb-3">
+                <h3 class="text-xl font-bold text-sky-800"><i class="fa-solid fa-hand-holding-dollar mr-2"></i>Registrar Pago / Abono</h3>
+                <button onclick="window.closeM('abonoModal')"><i class="fa-solid fa-xmark text-lg text-gray-400"></i></button>
+            </div>
+            <input type="hidden" id="abonoId">
+            <div class="mb-4 bg-slate-50 p-3 rounded border border-slate-200 text-sm">
+                <div class="flex justify-between mb-1"><span class="text-slate-500 font-semibold">Total del Gasto:</span> <span id="abonoTotalDisplay" class="font-bold text-slate-800">$0.00</span></div>
+                <div class="flex justify-between mb-1"><span class="text-emerald-600 font-semibold">Pagado hasta ahora:</span> <span id="abonoPagadoDisplay" class="font-bold text-emerald-700">$0.00</span></div>
+                <div class="flex justify-between border-t border-slate-200 mt-1 pt-1"><span class="text-red-500 font-semibold">Saldo Pendiente:</span> <span id="abonoSaldoDisplay" class="font-bold text-red-600">$0.00</span></div>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Moneda del Pago</label>
+                    <select id="abonoMoneda" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-bold">
+                        <option value="USD">USD</option>
+                        <option value="VES">VES</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-sky-700 uppercase mb-1">Monto a Pagar</label>
+                    <div class="relative">
+                        <input type="number" id="abonoMonto" step="0.01" class="w-full border border-sky-300 bg-sky-50 rounded px-3 py-2 text-sm font-bold text-sky-900 pr-8" placeholder="0.00">
+                        <button onclick="window.fillAbonoRestante()" class="absolute right-2 top-2 text-sky-600 hover:text-sky-800" title="Pagar saldo completo"><i class="fa-solid fa-check-double"></i></button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Tasa</label>
+                    <input type="number" id="abonoTasa" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-100 text-gray-500" value="1" disabled>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Equivale a (USD)</label>
+                    <div class="w-full border border-sky-200 bg-sky-100 rounded px-3 py-2 text-sm font-bold text-sky-800" id="abonoEquivUSD">$0.00</div>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-100">
+                <button onclick="window.closeM('abonoModal')" class="px-4 py-2 bg-gray-100 rounded text-sm">Cancelar</button>
+                <button onclick="window.saveAbono()" class="px-5 py-2 text-white bg-sky-600 rounded text-sm font-bold shadow">Procesar Pago</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="addIngresoModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="addIngresoModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[90%] max-w-4xl transform transition-transform scale-95">
+            <div class="flex justify-between items-center mb-4 border-b border-emerald-100 pb-3">
+                <h3 class="text-xl font-bold text-emerald-800">Añadir Ingreso</h3>
+                <button onclick="window.closeM('addIngresoModal')"><i class="fa-solid fa-xmark text-lg text-gray-400"></i></button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Fecha</label>
+                    <input type="date" id="addIngFecha" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Cliente / Origen</label>
+                    <input type="text" id="addIngOrigen" list="ingOrigenList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">F. Pago</label>
+                    <input type="text" id="addIngFormaPago" list="pagoList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-4 grid grid-cols-4 gap-4 bg-emerald-50 p-4 rounded border border-emerald-100">
+                    <div>
+                        <label class="block text-xs font-semibold text-emerald-700 uppercase mb-1">Moneda</label>
+                        <select id="addIngMoneda" class="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white font-bold">
+                            <option value="USD">USD</option>
+                            <option value="VES">VES</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-emerald-700 uppercase mb-1">Monto</label>
+                        <input type="number" id="addIngMonto" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-emerald-700 uppercase mb-1">Tasa <button onclick="window.autoFetchBCV('addIngTasa','addIngMonto','addIngEquivUSD')" class="ml-2 text-[9px] bg-white px-1 rounded shadow-sm border"><i class="fa-solid fa-rotate"></i> BCV</button></label>
+                        <input type="number" id="addIngTasa" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-100 text-gray-500" value="1" disabled>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-emerald-700 uppercase mb-1">USD</label>
+                        <div class="w-full border border-emerald-200 bg-emerald-100 rounded px-3 py-2 text-sm font-bold text-emerald-800" id="addIngEquivUSD">$0.00</div>
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Descripción</label>
+                    <input type="text" id="addIngDescripcion" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Comprobante URL</label>
+                    <input type="url" id="addIngLinkComprobante" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-100">
+                <button onclick="window.closeM('addIngresoModal')" class="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
+                <button onclick="window.saveNewIngreso()" class="px-5 py-2 text-white bg-emerald-600 rounded">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editIngresoModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="editIngresoModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[90%] max-w-4xl transform transition-transform scale-95">
+            <div class="flex justify-between items-center mb-4 border-b border-indigo-100 pb-3">
+                <h3 class="text-xl font-bold text-indigo-800">Editar Ingreso Completo</h3>
+                <button onclick="window.cerrarEditarIngreso()"><i class="fa-solid fa-xmark text-lg text-gray-400"></i></button>
+            </div>
+            <input type="hidden" id="editIngId">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Fecha</label>
+                    <input type="date" id="editIngFecha" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Origen</label>
+                    <input type="text" id="editIngOrigen" list="ingOrigenList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">F. Pago</label>
+                    <input type="text" id="editIngFormaPago" list="pagoList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-4 grid grid-cols-4 gap-4 bg-indigo-50 p-4 rounded border border-indigo-100">
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Moneda</label>
+                        <select id="editIngMoneda" class="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white font-bold">
+                            <option value="USD">USD</option>
+                            <option value="VES">VES</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Monto</label>
+                        <input type="number" id="editIngMonto" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Tasa <button onclick="window.autoFetchBCV('editIngTasa','editIngMonto','editIngEquivUSD')" class="ml-2 text-[9px] bg-white px-1 rounded shadow-sm border"><i class="fa-solid fa-rotate"></i></button></label>
+                        <input type="number" id="editIngTasa" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">USD</label>
+                        <div class="w-full border border-indigo-200 bg-indigo-100 rounded px-3 py-2 text-sm font-bold text-indigo-800" id="editIngEquivUSD">$0.00</div>
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Descripción</label>
+                    <input type="text" id="editIngDescripcion" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Comprobante URL</label>
+                    <input type="url" id="editIngLinkComprobante" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-100">
+                <button onclick="window.cerrarEditarIngreso()" class="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
+                <button onclick="window.guardarIngresoEditado()" class="px-5 py-2 text-white bg-indigo-600 rounded">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="addRecordModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="addRecordModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[90%] max-w-4xl transform transition-transform scale-95">
+            <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+                <h3 class="text-xl font-bold text-gray-800">Añadir Gasto</h3>
+                <button onclick="window.closeM('addRecordModal')"><i class="fa-solid fa-xmark text-lg text-gray-400"></i></button>
+            </div>
+            <div id="lastRecordInfoContainer" class="mb-5 bg-indigo-50/70 border border-indigo-100 rounded-lg p-3 hidden shadow-inner">
+                <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1 flex items-center"><i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Último gasto registrado:</p>
+                <div id="lastRecordDetails" class="text-xs text-indigo-900 font-medium"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Fecha</label>
+                    <input type="date" id="addFecha" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Estado</label>
+                    <select id="addEstadoPago" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-bold">
+                        <option value="PAGADO" class="text-emerald-600">PAGADO</option>
+                        <option value="PENDIENTE" class="text-red-600">PENDIENTE</option>
+                    </select>
+                </div>
+                <div class="md:col-span-3 grid grid-cols-4 gap-4 bg-indigo-50 p-4 rounded border border-indigo-100">
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Moneda</label>
+                        <select id="addMoneda" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-bold">
+                            <option value="USD">USD</option>
+                            <option value="VES">VES</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Monto Original</label>
+                        <input type="number" id="addMontoOriginal" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Tasa <button onclick="window.autoFetchBCV('addTasa','addMontoOriginal','addMontoEquivUSD')" class="ml-2 text-[9px] bg-white px-1 rounded shadow-sm border"><i class="fa-solid fa-rotate"></i></button></label>
+                        <input type="number" id="addTasa" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-100 text-gray-500" value="1" disabled>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Costo Base USD</label>
+                        <div class="w-full border border-indigo-200 bg-indigo-100 rounded px-3 py-2 text-sm font-bold text-indigo-800" id="addMontoEquivUSD">$0.00</div>
+                    </div>
+                </div>
+                <div class="md:col-span-3">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Proveedor</label>
+                    <input type="text" id="addProveedor" list="provList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">F. Pago</label>
+                    <input type="text" id="addFormaPago" list="pagoList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-3">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Descripción</label>
+                    <input type="text" id="addDescripcion" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Tipo de Gasto</label>
+                    <input type="text" id="addTipo" list="tipoList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Área / Disciplina</label>
+                    <input type="text" id="addArea" list="areaList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-3 grid grid-cols-2 gap-2">
+                    <div class="col-span-2"><h4 class="text-[10px] font-bold text-gray-500 uppercase mb-1">Soportes URLs</h4></div>
+                    <div><input type="url" id="addLinkFactura" placeholder="URL Factura" class="w-full border border-gray-300 rounded px-2 py-2 text-xs"></div>
+                    <div><input type="url" id="addLinkComprobante" placeholder="URL Comprobante" class="w-full border border-gray-300 rounded px-2 py-2 text-xs"></div>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-100">
+                <button onclick="window.closeM('addRecordModal')" class="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
+                <button onclick="window.saveNewRecord()" class="px-5 py-2 text-white bg-indigo-600 rounded">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editGastoModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="editGastoModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[90%] max-w-4xl transform transition-transform scale-95">
+            <div class="flex justify-between items-center mb-4 border-b border-indigo-100 pb-3">
+                <h3 class="text-xl font-bold text-indigo-800">Editar Gasto Completo</h3>
+                <button onclick="window.cerrarEditarGasto()"><i class="fa-solid fa-xmark text-lg text-gray-400"></i></button>
+            </div>
+            <input type="hidden" id="editGastoId">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Fecha</label>
+                    <input type="date" id="editGastoFecha" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Estado</label>
+                    <select id="editGastoEstado" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-bold">
+                        <option value="PAGADO" class="text-emerald-600">PAGADO</option>
+                        <option value="PENDIENTE" class="text-red-600">PENDIENTE</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-emerald-700 uppercase mb-1" title="Lo que has abonado hasta ahora">Abonado USD</label>
+                    <input type="number" id="editGastoMontoPagado" step="0.01" class="w-full border border-emerald-300 bg-emerald-50 rounded px-3 py-2 text-sm font-bold text-emerald-800 focus:ring-emerald-500">
+                </div>
+                <div class="md:col-span-2"></div>
+                <div class="md:col-span-3 grid grid-cols-4 gap-4 bg-indigo-50 p-4 rounded border border-indigo-100">
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Moneda</label>
+                        <select id="editGastoMoneda" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-bold">
+                            <option value="USD">USD</option>
+                            <option value="VES">VES</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Costo Original</label>
+                        <input type="number" id="editGastoMontoOriginal" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Tasa <button onclick="window.autoFetchBCV('editGastoTasa','editGastoMontoOriginal','editGastoEquivUSD')" class="ml-2 text-[9px] bg-white px-1 rounded shadow-sm border"><i class="fa-solid fa-rotate"></i></button></label>
+                        <input type="number" id="editGastoTasa" step="0.01" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Costo Base USD</label>
+                        <div class="w-full border border-indigo-200 bg-indigo-100 rounded px-3 py-2 text-sm font-bold text-indigo-800" id="editGastoEquivUSD">$0.00</div>
+                    </div>
+                </div>
+                <div class="md:col-span-3">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Proveedor</label>
+                    <input type="text" id="editGastoProveedor" list="provList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">F. Pago</label>
+                    <input type="text" id="editGastoFormaPago" list="pagoList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-3">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Descripción</label>
+                    <input type="text" id="editGastoDescripcion" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Tipo de Gasto</label>
+                    <input type="text" id="editGastoTipo" list="tipoList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Área / Disciplina</label>
+                    <input type="text" id="editGastoArea" list="areaList" class="w-full border border-gray-300 rounded px-3 py-2 text-sm uppercase" placeholder="Doble clic para ver opciones...">
+                </div>
+                <div class="md:col-span-3 grid grid-cols-2 gap-2">
+                    <div class="col-span-2"><h4 class="text-[10px] font-bold text-gray-500 uppercase mb-1">Soportes URLs</h4></div>
+                    <div><input type="url" id="editGastoLinkFactura" placeholder="URL Factura" class="w-full border border-gray-300 rounded px-2 py-2 text-xs"></div>
+                    <div><input type="url" id="editGastoLinkComprobante" placeholder="URL Comprobante" class="w-full border border-gray-300 rounded px-2 py-2 text-xs"></div>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-100">
+                <button onclick="window.cerrarEditarGasto()" class="px-4 py-2 bg-gray-100 rounded">Cancelar</button>
+                <button onclick="window.guardarGastoEditado()" class="px-5 py-2 text-white bg-indigo-600 rounded">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ELIMINAR -->
+    <div id="deleteConfirmModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="deleteConfirmModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[90%] max-w-md transform transition-transform scale-95">
+            <h3 class="text-xl font-bold text-center mb-2" id="deleteModalTitle">¿Eliminar registro?</h3>
+            <input type="hidden" id="deleteModalTxId">
+            <input type="hidden" id="deleteModalType" value="tx">
+            <div class="flex justify-center space-x-3 mt-4">
+                <button onclick="window.closeM('deleteConfirmModal')" class="px-5 py-2 bg-gray-100 rounded">Cancelar</button>
+                <button onclick="window.executeDeleteTransaction()" class="px-5 py-2 text-white bg-red-600 rounded font-bold">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL MIGRACIÓN MÁGICA -->
+    <div id="bulkPasteModal" class="fixed inset-0 bg-gray-900 bg-opacity-70 hidden flex items-center justify-center z-50 transition-opacity">
+        <div id="bulkPasteModalContent" class="bg-white rounded-xl shadow-2xl p-6 w-[95%] max-w-5xl transform transition-transform scale-95 flex flex-col h-[85vh]">
+            <div class="flex justify-between items-center mb-4 border-b border-purple-100 pb-3">
+                <div class="flex items-center space-x-3">
+                    <i class="fa-solid fa-rocket text-2xl text-purple-600"></i>
+                    <div>
+                        <h3 class="text-xl font-bold text-purple-900">Migrador Mágico (Excel a Dashboard)</h3>
+                        <p class="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Pega tus datos directamente desde Excel</p>
+                    </div>
+                </div>
+                <button onclick="window.closeM('bulkPasteModal')"><i class="fa-solid fa-xmark text-xl text-gray-400"></i></button>
+            </div>
+            
+            <div class="flex space-x-2 mb-4 bg-gray-100 p-1 rounded-lg">
+                <button id="tabGasto" onclick="window.switchBulkTab('gasto')" class="flex-1 py-2 rounded-md font-bold text-sm transition bg-white text-purple-700 shadow-sm">🛒 PEGAR EGRESOS</button>
+                <button id="tabIngreso" onclick="window.switchBulkTab('ingreso')" class="flex-1 py-2 rounded-md font-bold text-sm transition text-gray-500 hover:bg-gray-200">💰 PEGAR INGRESOS</button>
+            </div>
+
+            <div id="bulkGastoPanel" class="flex-1 flex flex-col">
+                <div class="mb-2 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-[11px] text-indigo-800">
+                    <p class="font-bold mb-1"><i class="fa-solid fa-info-circle mr-1"></i> Orden de columnas en Excel para EGRESOS:</p>
+                    <code class="bg-white px-2 py-0.5 rounded border border-indigo-200">Fecha | Tipo | Área | Proveedor | Descripción | Monto Orig | Tasa | % Admin | Estado | Pago</code>
+                </div>
+                <textarea id="bulkGastoInput" class="flex-1 w-full border-2 border-dashed border-indigo-200 rounded-lg p-4 font-mono text-xs focus:border-indigo-500 focus:outline-none bg-indigo-50/20" placeholder="Pega aquí las filas de tu Excel (Ctrl + V)..."></textarea>
+            </div>
+
+            <div id="bulkIngresoPanel" class="flex-1 hidden flex flex-col">
+                <div class="mb-2 p-3 bg-emerald-50 border border-emerald-100 rounded-lg text-[11px] text-emerald-800">
+                    <p class="font-bold mb-1"><i class="fa-solid fa-info-circle mr-1"></i> Orden de columnas en Excel para INGRESOS:</p>
+                    <code class="bg-white px-2 py-0.5 rounded border border-emerald-200">Fecha | Origen | Descripción | Monto Orig | Tasa | Pago</code>
+                </div>
+                <textarea id="bulkIngresoInput" class="flex-1 w-full border-2 border-dashed border-emerald-200 rounded-lg p-4 font-mono text-xs focus:border-emerald-500 focus:outline-none bg-emerald-50/20" placeholder="Pega aquí las filas de tu Excel (Ctrl + V)..."></textarea>
+            </div>
+
+            <div class="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
+                <div id="bulkPreview" class="text-xs font-bold text-gray-500"></div>
+                <div class="flex space-x-3">
+                    <button onclick="window.closeM('bulkPasteModal')" class="px-6 py-2 bg-gray-100 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-200">Cancelar</button>
+                    <button id="btnProcessBulk" onclick="window.processBulkPaste()" class="px-8 py-2 text-white bg-purple-600 rounded-lg text-sm font-black shadow-lg hover:bg-purple-700 transition transform hover:scale-105">🚀 PROCESAR E INSERTAR</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // VARIABLES GLOBALES (Motor principal)
+        window.rawData = []; 
+        window.rawIngresos = []; 
+        window.budgetData = []; 
+        window.contratosData = [];
+        window.filteredData = []; 
+        window.filteredIngresos = []; 
+        window.trendFilteredData = []; 
+        window.trendFilteredIngresos = [];
+        window.viewMode = 'MONTH'; 
+        let currentSort = { column: 'value', direction: 'desc' };
+        let charts = { trend: null, type: null, area: null, deuda: null, provider: null }; 
+        let toastTimer = null; 
+        let expandedProviders = new Set();
+        let originalFileName = "Base_Datos.csv"; 
+        window.isFileLoaded = false; 
+        let isChartAccumulated = true;
+        
+        const correccionesTipo = {'SUMINITROS':'SUMINISTROS','SUMINISTRIS':'SUMINISTROS','SUMUNISTROS':'SUMINISTROS','SUMINISTRO':'SUMINISTROS','SERVICIO':'SERVICIOS'};
+        const globalColors = ['#6366f1','#10b981','#f59e0b','#ec4899','#0ea5e9','#8b5cf6','#f43f5e','#22c55e','#f97316','#06b6d4','#a855f7','#ef4444'];
+        
+        // -------------------------------------------------------------
+        // NUEVO: SISTEMA DE AISLAMIENTO MULTI-OBRA
+        // -------------------------------------------------------------
+        window.listaObras = JSON.parse(localStorage.getItem('listaObras') || '[]');
+        window.proyectoActual = localStorage.getItem('proyectoActivo') || '';
+
+        // Función para añadir prefijo a las llaves de LocalStorage
+        window.getStorageKey = (key) => key + "_" + window.proyectoActual;
+
+        window.initMaestro = () => {
+            // Auto-limpieza: Si OBRA_PRINCIPAL está en la lista pero ya creaste otras, la borramos
+            if (window.listaObras.includes('OBRA_PRINCIPAL') && window.listaObras.length > 1) {
+                window.listaObras = window.listaObras.filter(o => o !== 'OBRA_PRINCIPAL');
+                localStorage.setItem('listaObras', JSON.stringify(window.listaObras));
+                if (window.proyectoActual === 'OBRA_PRINCIPAL') {
+                    window.proyectoActual = window.listaObras[0];
+                    localStorage.setItem('proyectoActivo', window.proyectoActual);
+                }
+            }
+
+            if (window.listaObras.length === 0 || (window.listaObras.length === 1 && window.listaObras[0] === 'OBRA_PRINCIPAL')) {
+                // Pre-cargamos tus obras por defecto
+                window.listaObras = ['RANCHO_FLAMBOYANT', 'CALLE_DOS_OJOS'];
+                window.proyectoActual = 'RANCHO_FLAMBOYANT';
+                localStorage.setItem('listaObras', JSON.stringify(window.listaObras));
+                localStorage.setItem('proyectoActivo', window.proyectoActual);
+            }
+            if (!window.listaObras.includes(window.proyectoActual)) {
+                window.proyectoActual = window.listaObras[0];
+                localStorage.setItem('proyectoActivo', window.proyectoActual);
+            }
+            window.renderSelectorObras();
+            window.restoreSession(); // Esto cargará los datos de la obra actual automáticamente
+        };
+
+        window.renderSelectorObras = () => {
+            const selector = document.getElementById('obraSelector');
+            selector.innerHTML = '';
+            window.listaObras.forEach(o => {
+                let opt = document.createElement('option');
+                opt.value = o; opt.textContent = o.replace(/_/g, ' '); // Muestra bonito (sin guiones)
+                if(o === window.proyectoActual) opt.selected = true;
+                selector.appendChild(opt);
+            });
+        };
+
+        window.cambiarObra = () => {
+            window.proyectoActual = document.getElementById('obraSelector').value;
+            localStorage.setItem('proyectoActivo', window.proyectoActual);
+            window.restoreSession();
+        };
+
+        window.crearNuevaObra = () => {
+            let input = document.getElementById('nuevaObraNombre');
+            let nombre = input.value.toUpperCase().trim().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, '_');
+            if(!nombre) return window.showToast("Escriba un nombre válido", "error");
+            if(window.listaObras.includes(nombre)) return window.showToast("Esa obra ya existe", "error");
+            
+            window.listaObras.push(nombre);
+            localStorage.setItem('listaObras', JSON.stringify(window.listaObras));
+            window.proyectoActual = nombre;
+            localStorage.setItem('proyectoActivo', window.proyectoActual);
+            
+            input.value = '';
+            window.renderSelectorObras();
+            window.startEmptyDatabase(); // Resetea la memoria para la nueva obra
+            safeSetText('projectName', nombre.replace(/_/g, ' '));
+            window.backupLocal(); // Crea los contenedores vacíos en LocalStorage
+            window.restoreSession(); // Refresca UI
+            window.showToast("Nueva obra creada con éxito", "success");
+        };
+
+        window.eliminarObraActual = () => {
+            if (window.listaObras.length <= 1) {
+                return window.showToast("No puedes eliminar la única obra que tienes.", "error");
+            }
+            const nombreMostrar = window.proyectoActual.replace(/_/g, ' ');
+            if (confirm(`¿Estás seguro de que deseas ELIMINAR permanentemente la obra "${nombreMostrar}"?\nSe borrarán todos sus registros de gastos e ingresos.`)) {
+                // Borrar del listado
+                window.listaObras = window.listaObras.filter(o => o !== window.proyectoActual);
+                localStorage.setItem('listaObras', JSON.stringify(window.listaObras));
+                
+                // Borrar datos reales de la memoria
+                const sufijo = "_" + window.proyectoActual;
+                localStorage.removeItem('pd_data' + sufijo);
+                localStorage.removeItem('pd_ing' + sufijo);
+                localStorage.removeItem('pd_budg' + sufijo);
+                localStorage.removeItem('pd_ctr' + sufijo);
+                
+                // Seleccionar la primera obra disponible
+                window.proyectoActual = window.listaObras[0];
+                localStorage.setItem('proyectoActivo', window.proyectoActual);
+                
+                window.location.reload();
+            }
+        };
+
+        // Modificamos el guardado para que respete el aislamiento
+        window.backupLocal = () => { 
+            try { 
+                localStorage.setItem(window.getStorageKey('pd_data'), JSON.stringify(window.rawData)); 
+                localStorage.setItem(window.getStorageKey('pd_ing'), JSON.stringify(window.rawIngresos)); 
+                localStorage.setItem(window.getStorageKey('pd_budg'), JSON.stringify(window.budgetData)); 
+                localStorage.setItem(window.getStorageKey('pd_ctr'), JSON.stringify(window.contratosData)); 
+                localStorage.setItem(window.getStorageKey('pd_comp'), getTxt('companyName')); 
+                localStorage.setItem(window.getStorageKey('pd_proj'), getTxt('projectName')); 
+                localStorage.setItem(window.getStorageKey('pd_area'), getVal('inputAreaM2')); 
+                localStorage.setItem(window.getStorageKey('pd_est'), getVal('inputEstPriceM2')); 
+                localStorage.setItem(window.getStorageKey('pd_fee'), getVal('adminFeeInput')); 
+            } catch(e) {} 
+        };
+
+        // Modificamos el restaurado para que respete el aislamiento
+        window.restoreSession = () => { 
+            try { 
+                const d=localStorage.getItem(window.getStorageKey('pd_data')), 
+                      i=localStorage.getItem(window.getStorageKey('pd_ing')), 
+                      b=localStorage.getItem(window.getStorageKey('pd_budg')), 
+                      c=localStorage.getItem(window.getStorageKey('pd_ctr')); 
+                
+                if(d && i && d.length > 5){ // Si la obra tiene datos guardados
+                    window.rawData=JSON.parse(d); 
+                    window.rawIngresos=JSON.parse(i); 
+                    window.budgetData=b?JSON.parse(b):[]; 
+                    window.contratosData=c?JSON.parse(c):[]; 
+                    safeSetText('companyName', localStorage.getItem(window.getStorageKey('pd_comp'))||'EMPRESA C.A.'); 
+                    safeSetText('projectName', localStorage.getItem(window.getStorageKey('pd_proj'))|| window.proyectoActual.replace(/_/g, ' ')); 
+                    if(localStorage.getItem(window.getStorageKey('pd_area'))) safeVal('inputAreaM2', localStorage.getItem(window.getStorageKey('pd_area'))); 
+                    if(localStorage.getItem(window.getStorageKey('pd_est'))) safeVal('inputEstPriceM2', localStorage.getItem(window.getStorageKey('pd_est'))); 
+                    if(localStorage.getItem(window.getStorageKey('pd_fee'))) safeVal('adminFeeInput', localStorage.getItem(window.getStorageKey('pd_fee'))); 
+                    upTitle(); 
+                    document.getElementById('uploadSection').classList.add('hidden'); 
+                    document.getElementById('filtersSection').classList.remove('hidden'); 
+                    document.getElementById('dashboardContent').classList.remove('hidden'); 
+                    window.populateFilters(); window.applyFilters(); 
+                    window.showToast("Datos de la obra cargados", "success"); 
+                } else {
+                    // Si es una obra nueva sin datos, mostramos el uploader
+                    window.rawData=[]; window.rawIngresos=[]; window.budgetData=[]; window.contratosData=[];
+                    safeSetText('companyName', 'EMPRESA C.A.');
+                    safeSetText('projectName', window.proyectoActual.replace(/_/g, ' '));
+                    upTitle();
+                    document.getElementById('uploadSection').classList.remove('hidden');
+                    document.getElementById('filtersSection').classList.add('hidden');
+                    document.getElementById('dashboardContent').classList.add('hidden');
+                }
+            } catch(e) { window.showToast("Error al cargar la obra", "error"); } 
+        };
+
+        window.startEmptyDatabase = (save = true) => { 
+            window.rawData=[]; window.rawIngresos=[]; window.budgetData=[]; window.contratosData=[]; 
+            document.getElementById('uploadSection').classList.add('hidden'); 
+            document.getElementById('filtersSection').classList.remove('hidden'); 
+            document.getElementById('dashboardContent').classList.remove('hidden'); 
+            safeSetText('projectName', window.proyectoActual.replace(/_/g, ' '));
+            window.populateFilters(); window.applyFilters(); 
+            if(save) {
+                window.backupLocal();
+                window.showToast("Base iniciada en blanco","success"); 
+            }
+        };
+
+        // -------------------------------------------------------------
+        // RESTO DE FUNCIONALIDADES ORIGINALES DE V50
+        // -------------------------------------------------------------
+        
+        // UTILIDADES
+        const formatCurrency = (v) => new Intl.NumberFormat('en-US', {style:'currency',currency:'USD',minimumFractionDigits:2}).format(v||0);
+        const formatCurrencyVES = (v) => new Intl.NumberFormat('es-VE', {style:'currency',currency:'VES',minimumFractionDigits:2}).format(v||0);
+        const formatCompact = (v) => { if(!v)return"$0"; if(v>=1000000)return '$'+(v/1000000).toFixed(1)+'M'; if(v>=1000)return '$'+(v/1000).toFixed(1)+'K'; return '$'+Math.round(v); };
+        
+        const safeSetText = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
+        const safeSetClass = (id, cls) => { const el = document.getElementById(id); if(el) el.className = cls; };
+        const getVal = (id) => document.getElementById(id)?.value||'';
+        const safeVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+        const getTxt = (id) => document.getElementById(id)?.textContent||'';
+        const safeHtml = (s) => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        const safeJs = (s) => String(s||'').replace(/\\/g,'\\\\').replace(/'/g,'\\\'').replace(/"/g,'&quot;').replace(/\n/g,' ');
+
+        window.openM = (id) => { 
+            const m = document.getElementById(id); 
+            if(m){ 
+                m.classList.remove('hidden'); 
+                setTimeout(()=>document.getElementById(id+'Content')?.classList.remove('scale-95'), 10); 
+            } 
+        };
+
+        window.closeM = (id) => { 
+            document.getElementById(id+'Content')?.classList.add('scale-95'); 
+            setTimeout(()=>document.getElementById(id)?.classList.add('hidden'), 150); 
+        };
+
+        window.showToast = (m, t='success') => { 
+            const tb=document.getElementById('toastNotification'); 
+            const ti=document.getElementById('toastIcon'); 
+            if(!tb) return; 
+            tb.className=`fixed bottom-5 right-5 text-white px-4 py-3 rounded shadow-lg transition-opacity z-50 flex items-center ${t==='success'?'bg-emerald-500':'bg-red-500'}`; 
+            ti.className=`fa-solid mr-2 ${t==='success'?'fa-circle-check':'fa-circle-exclamation'}`; 
+            document.getElementById('toastMessage').textContent=m; 
+            tb.classList.remove('opacity-0'); 
+            if(toastTimer) clearTimeout(toastTimer); 
+            toastTimer = setTimeout(()=>tb.classList.add('opacity-0'), 3000); 
+        };
+
+        const upTitle = () => { 
+            const c=document.getElementById('companyName')?.textContent.trim()||'EMP', p=document.getElementById('projectName')?.textContent.trim()||'OBR'; 
+            document.title=`Dashboard - ${c} - ${p}`; 
+            if(!window.isFileLoaded) originalFileName=`${c}_${p}.csv`; 
+        };
+
+        ['companyName','projectName'].forEach(id=>{ 
+            const el=document.getElementById(id); 
+            if(el){
+                el.addEventListener('blur',function(){ 
+                    if(!this.textContent.trim()) this.textContent='DATO'; 
+                    upTitle(); 
+                    window.showToast('Actualizado','success'); 
+                    window.backupLocal(); 
+                });
+                el.addEventListener('keydown',function(e){ 
+                    if(e.key==='Enter'){e.preventDefault();this.blur();} 
+                });
+            } 
+        });
+
+        window.parseDateForSort = (dStr) => { 
+            if(!dStr)return 0; 
+            let s=String(dStr).trim().split(' ')[0]; 
+            if(s.includes('/')){let p=s.split('/'); if(p.length===3)return new Date(p[2],p[1]-1,p[0]).getTime();} 
+            if(s.includes('-')){let p=s.split('-'); if(p.length===3&&p[0].length===4)return new Date(p[0],p[1]-1,p[2]).getTime(); if(p.length===3&&p[2].length===4)return new Date(p[2],p[1]-1,p[0]).getTime();} 
+            return new Date(s).getTime()||0; 
+        };
+
+        window.getMonthYearFromDate = (fStr) => { 
+            if(!fStr)return 'Desc'; 
+            let d=new Date(window.parseDateForSort(fStr)); 
+            if(isNaN(d))return 'Desc'; 
+            return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); 
+        };
+        
+        window.getWeekYearFromDate = (fStr) => { 
+            if(!fStr)return 'Desc'; 
+            let d=new Date(window.parseDateForSort(fStr)); 
+            if(isNaN(d))return 'Desc'; 
+            const d2=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); 
+            const dn=d2.getUTCDay()||7; 
+            d2.setUTCDate(d2.getUTCDate()+4-dn); 
+            const ys=new Date(Date.UTC(d2.getUTCFullYear(),0,1)); 
+            const w=Math.ceil((((d2-ys)/86400000)+1)/7); 
+            return d2.getUTCFullYear()+'-S'+String(w).padStart(2,'0'); 
+        };
+
+        window.autoFetchBCV = async function(tI, mI, dI) { 
+            const t=document.getElementById(tI); 
+            if(t) t.placeholder="Buscando..."; 
+            try { 
+                const res=await fetch('https://ve.dolarapi.com/v1/dolares/oficial'); 
+                const data=await res.json(); 
+                if(data&&data.promedio){
+                    if(t)t.value=data.promedio; 
+                    window.showToast("Tasa obtenida","success"); 
+                    document.getElementById(mI)?.dispatchEvent(new Event('input'));
+                } 
+            } catch(e) {
+                window.showToast("Error BCV","error"); 
+                if(t) t.placeholder="0.00";
+            } 
+        };
+        
+        const setupMC = (mId, amtId, tId, dId) => { 
+            const monEl=document.getElementById(mId), amtEl=document.getElementById(amtId), tasEl=document.getElementById(tId), dEl=document.getElementById(dId); 
+            if(!monEl || !amtEl || !tasEl) return; 
+            const calc=()=>{ 
+                const mon=monEl.value, amt=parseFloat(amtEl.value)||0, tas=parseFloat(tasEl.value)||1; 
+                let eq=0; 
+                if(mon==='USD') eq=amt; 
+                else if(mon==='VES'&&tas>0) eq=amt/tas; 
+                if(dEl) dEl.textContent=formatCurrency(eq); 
+            }; 
+            monEl.addEventListener('change',function(){ 
+                if(this.value==='USD'){
+                    tasEl.value=1; tasEl.disabled=true; tasEl.classList.add('bg-gray-100','text-gray-500');
+                } else {
+                    tasEl.disabled=false; tasEl.value=''; tasEl.classList.remove('bg-gray-100','text-gray-500'); 
+                    window.autoFetchBCV(tId,amtId,dId);
+                } 
+                calc(); 
+            }); 
+            amtEl.addEventListener('input',calc); 
+            tasEl.addEventListener('input',calc); 
+        };
+        
+        setupMC('addIngMoneda', 'addIngMonto', 'addIngTasa', 'addIngEquivUSD');
+        setupMC('editIngMoneda', 'editIngMonto', 'editIngTasa', 'editIngEquivUSD');
+        setupMC('addMoneda', 'addMontoOriginal', 'addTasa', 'addMontoEquivUSD');
+        setupMC('editGastoMoneda', 'editGastoMontoOriginal', 'editGastoTasa', 'editGastoEquivUSD');
+        setupMC('abonoMoneda', 'abonoMonto', 'abonoTasa', 'abonoEquivUSD');
+
+        window.aggregateData = (d, k) => { 
+            const a=d.reduce((ac,r)=>{ac[r[k]]=(ac[r[k]]||0)+r.costo; return ac;},{}); 
+            return Object.entries(a).map(([n,v])=>({name:n,value:v})).sort((a,b)=>b.value-a.value); 
+        };
+        
+        window.getTrendSeries = (arr, vK, pK, pA, mul=1) => { 
+            const g = arr.reduce((a,r) => { a[r[pK]] = (a[r[pK]]||0) + (r[vK]*mul); return a; }, {}); 
+            return pA.map(m => g[m] || 0); 
+        };
+        
+        window.accumulateSeries = (s) => { 
+            let t=0; return s.map(v => { t+=v; return t; }); 
+        };
+        
+        window.toggleChartMode = () => { 
+            isChartAccumulated = !isChartAccumulated; 
+            const b = document.getElementById('btnChartMode'); 
+            if (b) b.innerHTML = isChartAccumulated ? '<i class="fa-solid fa-chart-area mr-1"></i> Acumulado' : '<i class="fa-solid fa-chart-bar mr-1"></i> Periodo'; 
+            window.updateCharts(); 
+        };
+
+        document.getElementById('csvFileInput').addEventListener('change', function(e) { 
+            const file = e.target.files[0]; 
+            if (!file) return; 
+            originalFileName = file.name; window.isFileLoaded = true; 
+            const reader = new FileReader(); 
+            reader.onload = function(ev) { window.processCSVText(ev.target.result); }; 
+            reader.readAsText(file, 'ISO-8859-1'); 
+        });
+        
+        window.processCSVText = function(text) {
+            const lines = text.split(/\r?\n/); let hIdx = -1;
+            for (let i = 0; i < Math.min(150, lines.length); i++) { 
+                const l = lines[i].toUpperCase(); 
+                if (l.includes('FECHA') || l.includes('CLASE') || l.includes('MONTO') || l.includes('TIPO')) { hIdx = i; break; } 
+            }
+            if (hIdx === -1) hIdx = 0;
+            let del = ","; 
+            if (lines[hIdx].includes(";")) del = ";"; 
+            else if (lines[hIdx].includes("\t")) del = "\t";
+            Papa.parse(lines.slice(hIdx).join('\n'), { 
+                header: true, skipEmptyLines: true, delimiter: del, 
+                complete: function(res) { window.cleanAndLoadData(res.data); }, 
+                error: function(err) { window.showToast("Error CSV", "error"); } 
+            });
+        };
+
+        window.cleanAndLoadData = function(data) {
+            window.rawData = []; window.rawIngresos = []; window.budgetData = []; window.contratosData = []; 
+            const removeAccents = (str) => str ? String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase() : "";
+            
+            if (data.length > 0) {
+                const keys = Object.keys(data[0]); 
+                const getHeaderVal = (searchKey) => { const fK = keys.find(k => removeAccents(k).includes(searchKey)); return fK ? data[0][fK] : null; };
+                const c = getHeaderVal('EMPRESA') || getHeaderVal('PROYECTO');
+                const p = getHeaderVal('NOMBRE OBRA') || getHeaderVal('OBRA');
+                const ar = getHeaderVal('CONSTRUCCION') || getHeaderVal('AREA M2');
+                const ep = getHeaderVal('ESTIMADO') || getHeaderVal('PRECIO');
+                
+                if (c && String(c).trim() !== '') safeSetText('companyName', String(c).trim()); 
+                if (p && String(p).trim() !== '') safeSetText('projectName', String(p).trim());
+                
+                const areaInp = document.getElementById('inputAreaM2'); if(areaInp && ar) areaInp.value = parseFloat(ar) || 100;
+                const estInp = document.getElementById('inputEstPriceM2'); if(estInp && ep) estInp.value = parseFloat(String(ep).replace(/[^0-9.]/g, '')) || 0;
+                upTitle();
+                
+                for(let r of data) {
+                    const rKeys = Object.keys(r); 
+                    const getRVal = (sK) => { const fK = rKeys.find(k => removeAccents(k).includes(sK)); return fK ? r[fK] : null; };
+                    const clase = String(getRVal('CLASE') || '').toUpperCase();
+                    if (!clase.includes('INGRESO') && !clase.includes('PRESUPUESTO') && !clase.includes('CONTRATO')) { 
+                        const adminStr = getRVal('% ADMIN') || getRVal('ADMIN') || getRVal('PORCENTAJE'); 
+                        if (adminStr && String(adminStr).trim() !== '' && String(adminStr).trim() !== '0%') { 
+                            const pF = parseFloat(String(adminStr).replace('%', '').trim()); 
+                            const adInp = document.getElementById('adminFeeInput'); 
+                            if (!isNaN(pF) && adInp) { adInp.value = pF; break; } 
+                        } 
+                    }
+                }
+            }
+            
+            const nDate = (s) => { 
+                if(!s)return ''; let p=s.trim().split(' ')[0]; 
+                if(/^\d+$/.test(p)){let d=new Date((parseInt(p)-25569)*86400000);return !isNaN(d)?d.toISOString().split('T')[0]:p;} 
+                if(p.includes('/')){let x=p.split('/');return x[2]?.length===4?`${x[2]}-${x[1].padStart(2,'0')}-${x[0].padStart(2,'0')}`:`${x[0]}-${x[1]?.padStart(2,'0')}-${x[2]?.padStart(2,'0')}`;} 
+                if(p.includes('-')){let x=p.split('-');return x[0]?.length===4?`${x[0]}-${x[1].padStart(2,'0')}-${x[2].padStart(2,'0')}`:`${x[2]}-${x[1]?.padStart(2,'0')}-${x[0]?.padStart(2,'0')}`;} 
+                try{let d=new Date(p);if(!isNaN(d))return d.toISOString().split('T')[0];}catch(e){}return p; 
+            };
+
+            data.forEach(row => {
+                const keys = Object.keys(row); 
+                const getValD = (searchKey) => { const fK = keys.find(k => removeAccents(k).includes(searchKey)); return fK ? row[fK] : null; };
+                const fRaw = getValD('FECHA'); if (!fRaw) return;
+                
+                const fechaStr = nDate(fRaw);
+                const claseStr = String(getValD('CLASE') || '').toUpperCase();
+                const isIngreso = claseStr.includes('INGRESO');
+                const isPresupuesto = claseStr.includes('PRESUPUESTO');
+                const isContrato = claseStr.includes('CONTRATO');
+                const uniqueId = (isIngreso ? 'ing_' : (isPresupuesto ? 'bud_' : (isContrato ? 'ctr_' : 'tx_'))) + Math.random().toString(36).substr(2, 9);
+                
+                let moneda = String(getValD('MONEDA') || 'USD').toUpperCase().trim();
+                let tasa = parseFloat(String(getValD('TASA') || '1').replace(/,/g, '')) || 1;
+                let montoOriginalStr = getValD('MONTO ORIG') || getValD('COSTO BASE') || getValD('COSTO TOTAL') || getValD('COSTO') || getValD('ORIG') || getValD('MONTO') || '0';
+                let montoOriginal = parseFloat(String(montoOriginalStr).replace(/,/g, '').replace(/\$/g, '').trim()) || 0;
+                let formaPago = String(getValD('FORMA DE PAGO') || getValD('PAGO') || '').trim().toUpperCase();
+                let linkFactura = String(getValD('LINK FACTURA') || getValD('FACTURA') || '').trim();
+                let linkComprobante = String(getValD('LINK COMPROBANTE') || getValD('COMPROBANTE') || '').trim();
+                let estadoRaw = String(getValD('ESTADO') || getValD('ESTATUS') || 'PAGADO').trim().toUpperCase();
+                let estadoPago = 'PAGADO';
+                
+                if (estadoRaw.includes('PENDIENTE') || estadoRaw.includes('POR PAGAR') || estadoRaw.includes('DEUDA')) { 
+                    estadoPago = 'PENDIENTE'; 
+                }
+                
+                let montoPagadoStr = getValD('MONTO PAGADO') || getValD('PAGADO') || getValD('PAGADOUSD');
+                const mesValue = window.getMonthYearFromDate(fechaStr);
+                const semanaValue = window.getWeekYearFromDate(fechaStr);
+                
+                let rawDesc = getValD('DESCRIP') || getValD('DETALLE') || getValD('CONCEPTO') || getValD('MOTIVO') || getValD('NOTA') || getValD('OBSERVAC');
+                let descripcionVal = rawDesc ? String(rawDesc).trim() : 'Sin descripción';
+                if (descripcionVal === '') descripcionVal = 'Sin descripción';
+                
+                let origen = String(getValD('PROVEEDOR') || getValD('ORIGEN') || getValD('CLIENTE') || 'DESCONOCIDO').toUpperCase().trim();
+                let montoUSDStr = getValD('MONTO BASE USD') || getValD('TOTAL USD') || getValD('BASEUSD') || getValD('BASE USD') || '0';
+                let montoUSD = parseFloat(String(montoUSDStr).replace(/,/g, '').replace(/\$/g, '').trim()); 
+                
+                if (isNaN(montoUSD) || montoUSD === 0) {
+                    montoUSD = (moneda === 'VES' && tasa > 0) ? montoOriginal / tasa : montoOriginal;
+                }
+                montoUSD = parseFloat(montoUSD) || 0;
+
+                if (isIngreso) { 
+                    window.rawIngresos.push({ id: uniqueId, fecha: fechaStr, mes: mesValue, semana: semanaValue, origen: origen, descripcion: descripcionVal, moneda: moneda, monto: montoOriginal, tasa: tasa, montoUSD: montoUSD, formaPago: formaPago, linkComprobante: linkComprobante, estadoPago: 'PAGADO' }); 
+                } else if (isPresupuesto) {
+                    let disciplina = String(getValD('DISCIPLINA') || getValD('AREA') || 'GENERAL').toUpperCase().trim();
+                    window.budgetData.push({ id: uniqueId, fecha: fechaStr, disciplina: disciplina, montoUSD: montoUSD });
+                } else if (isContrato) {
+                    window.contratosData.push({ id: uniqueId, fecha: fechaStr, proveedor: origen, descripcion: descripcionVal, montoUSD: montoUSD });
+                } else { 
+                    let tipo = String(getValD('TIPO') || getValD('CATEGORIA') || '').trim().toUpperCase(); 
+                    tipo = correccionesTipo[tipo] || tipo || 'NO ESPECIFICADO'; 
+                    let disciplina = String(getValD('DISCIPLINA') || getValD('AREA') || 'NO ESPECIFICADO').trim().toUpperCase(); 
+                    let costoBaseUSD = (moneda === 'VES' && tasa > 0) ? montoOriginal / tasa : montoOriginal; 
+                    
+                    let montoPagado = montoPagadoStr !== null ? parseFloat(String(montoPagadoStr).replace(/,/g, '').replace(/\$/g, '').trim()) : (estadoPago === 'PAGADO' ? costoBaseUSD : 0);
+                    if (isNaN(montoPagado)) montoPagado = (estadoPago === 'PAGADO' ? costoBaseUSD : 0);
+                    if (estadoPago === 'PAGADO') montoPagado = costoBaseUSD;
+
+                    window.rawData.push({ id: uniqueId, fecha: fechaStr, mes: mesValue, semana: semanaValue, tipo: tipo, disciplina: disciplina, proveedor: origen, descripcion: descripcionVal, moneda: moneda, tasa: tasa, montoOriginal: montoOriginal, costo: costoBaseUSD, montoPagado: montoPagado, formaPago: formaPago, linkFactura: linkFactura, linkComprobante: linkComprobante, estadoPago: estadoPago }); 
+                }
+            });
+            
+            document.getElementById('uploadSection').classList.add('hidden'); 
+            document.getElementById('filtersSection').classList.remove('hidden'); 
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            window.populateFilters(); window.applyFilters(); window.backupLocal();
+        };
+
+        // FILTROS
+        window.toggleViewModePeriod = () => { 
+            window.viewMode = window.viewMode === 'MONTH' ? 'WEEK' : 'MONTH'; 
+            const bTop = document.getElementById('btnViewModePeriodTop'); 
+            const bChart = document.getElementById('btnViewModePeriodChart'); 
+            
+            if(window.viewMode === 'WEEK'){
+                if(bTop) bTop.innerHTML = '<i class="fa-solid fa-calendar-days mr-2"></i> Vista: Semanal'; 
+                if(bChart) bChart.innerHTML = '<i class="fa-solid fa-calendar-days mr-1"></i> Vista: Semanal'; 
+                safeSetText('periodFilterLabel','Semana');
+            } else {
+                if(bTop) bTop.innerHTML = '<i class="fa-solid fa-calendar-week mr-2"></i> Vista: Mensual'; 
+                if(bChart) bChart.innerHTML = '<i class="fa-solid fa-calendar-week mr-1"></i> Vista: Mensual'; 
+                safeSetText('periodFilterLabel','Mes');
+            }
+            
+            const pf = document.getElementById('periodFilter'); 
+            if(pf) pf.value = 'ALL'; 
+            window.populateFilters(); window.applyFilters(); 
+        };
+        
+        window.populateFilters = () => { 
+            const pf = document.getElementById('periodFilter'); const cP = pf ? pf.value : 'ALL'; const pK = window.viewMode === 'WEEK' ? 'semana' : 'mes'; 
+            const allPeriods = [...new Set([...window.rawData.map(d=>d[pK]), ...window.rawIngresos.map(d=>d[pK])])].filter(m => m !== 'Desconocido').sort(); 
+            const types = [...new Set(window.rawData.map(d => d.tipo))].sort(), areas = [...new Set(window.rawData.map(d => d.disciplina))].sort(); 
+            const providers = [...new Set([...window.rawData.map(d => d.proveedor), ...window.rawIngresos.map(d => d.origen)])].sort();
+            
+            const createOptions = (arr, selectId, currentValue) => { 
+                const select = document.getElementById(selectId); if(!select) return; const firstOption = select.options[0].outerHTML; 
+                if(selectId === 'estadoFilter') return; select.innerHTML = firstOption; 
+                arr.forEach(item => { if(!item) return; const opt = document.createElement('option'); opt.value = item; opt.textContent = item; if (item === currentValue) opt.selected = true; select.appendChild(opt); }); 
+            }; 
+            
+            createOptions(allPeriods, 'periodFilter', cP); 
+            createOptions(types, 'typeFilter', document.getElementById('typeFilter')?.value); 
+            createOptions(areas, 'areaFilter', document.getElementById('areaFilter')?.value); 
+            createOptions(providers, 'providerFilter', document.getElementById('providerFilter')?.value); 
+        };
+
+        window.resetFilters = () => { 
+            ['periodFilter','typeFilter','areaFilter','providerFilter','estadoFilter'].forEach(id=>safeVal(id,'ALL')); 
+            window.applyFilters(); 
+        };
+
+        window.applyFilters = () => {
+            const fP = getVal('periodFilter') || 'ALL';
+            const fT = getVal('typeFilter') || 'ALL';
+            const fA = getVal('areaFilter') || 'ALL';
+            const fPr = getVal('providerFilter') || 'ALL';
+            const fE = getVal('estadoFilter') || 'ALL';
+            const pK = window.viewMode === 'WEEK' ? 'semana' : 'mes';
+            
+            const baseFiltered = window.rawData.filter(d => (fP === 'ALL' || d[pK] === fP) && (fT === 'ALL' || d.tipo === fT) && (fA === 'ALL' || d.disciplina === fA) && (fPr === 'ALL' || d.proveedor === fPr));
+            const baseTrend = window.rawData.filter(d => (fP === 'ALL' || d[pK] <= fP) && (fT === 'ALL' || d.tipo === fT) && (fA === 'ALL' || d.disciplina === fA) && (fPr === 'ALL' || d.proveedor === fPr));
+
+            window.filteredData = baseFiltered.filter(d => (fE === 'ALL' || d.estadoPago === fE)); 
+            window.trendFilteredData = baseTrend.filter(d => (fE === 'ALL' || d.estadoPago === fE));
+            
+            window.filteredIngresos = window.rawIngresos.filter(d => (fP === 'ALL' || d[pK] === fP) && (fPr === 'ALL' || d.origen === fPr)); 
+            window.trendFilteredIngresos = window.rawIngresos.filter(d => (fP === 'ALL' || d[pK] <= fP) && (fPr === 'ALL' || d.origen === fPr));
+            
+            window.updateKPIs(baseFiltered, baseTrend); 
+            setTimeout(window.updateCharts, 250); 
+        };
+
+        window.updateKPIs = function(baseFiltered, baseTrend) {
+            const fi = document.getElementById('adminFeeInput'); const feeRate = fi ? parseFloat(fi.value) || 0 : 0; const multiplier = 1 + (feeRate / 100);
+            
+            const totalIngresosHist = window.rawIngresos.reduce((sum, d) => sum + d.montoUSD, 0);
+            const totalGastosBaseHist = window.rawData.reduce((sum, d) => sum + d.costo, 0);
+            const totalGastosAdminHist = totalGastosBaseHist * (feeRate / 100);
+            const totalGastosTotalHist = totalGastosBaseHist * multiplier;
+            
+            const totalPagadoHist = window.rawData.reduce((sum, d) => sum + (d.estadoPago === 'PAGADO' ? d.costo : (d.montoPagado || 0)), 0) * multiplier;
+            const totalDeudaHist = window.rawData.reduce((sum, d) => sum + (d.estadoPago === 'PAGADO' ? 0 : Math.max(0, d.costo - (d.montoPagado || 0))), 0) * multiplier;
+            const balanceHist = totalIngresosHist - totalPagadoHist;
+            
+            safeSetText('kpiTotalIngresosHist', formatCurrency(totalIngresosHist)); 
+            safeSetText('kpiTotalEgresosNetosHist', formatCurrency(totalGastosBaseHist)); 
+            safeSetText('kpiTotalEgresosAdminHist', formatCurrency(totalGastosAdminHist)); 
+            safeSetText('kpiTotalEgresosHist', formatCurrency(totalGastosTotalHist)); 
+            safeSetText('kpiTotalPagado', formatCurrency(totalPagadoHist)); 
+            safeSetText('kpiTotalPorPagar', formatCurrency(totalDeudaHist)); 
+            safeSetText('kpiBalanceHist', formatCurrency(balanceHist));
+            
+            const balEl = document.getElementById('kpiBalanceHist'); 
+            if (balEl) balEl.className = balanceHist >= 0 ? "text-xl xl:text-2xl font-black text-indigo-800" : "text-xl xl:text-2xl font-black text-red-600";
+            
+            window.updateM2Metrics(); window.renderIngresosTable(); window.renderDeudasTable(); window.renderBudgetTable(); window.renderContratosTable(); 
+            const searchInp = document.getElementById('providerSearchInput'); window.renderProviderTable(searchInp ? searchInp.value : '');
+        };
+
+        window.updateM2Metrics = () => {
+            const ar = parseFloat(getVal('inputAreaM2'))||1, ep = parseFloat(getVal('inputEstPriceM2'))||0, fr = parseFloat(getVal('adminFeeInput'))||0;
+            const tc = window.rawData.reduce((s,d)=>s+d.costo,0)*(1+(fr/100)), pT=ar*ep, cM2=tc/ar, pct = ep>0 ? (cM2/ep)*100 : 0;
+            safeSetText('m2PresupuestoTotal', formatCurrency(pT)); safeSetText('m2CostoReal', formatCurrency(cM2)); safeSetText('m2PctVariacion', ep>0 ? pct.toFixed(2)+"%" : "0.00%");
+            const clS = cM2>ep ? "red" : "emerald", clB = ep>0 ? clS : "sky";
+            safeSetClass('m2StatusIndicator', `absolute bottom-0 left-0 w-full h-1.5 bg-${clB}-${ep>0?500:500} transition-colors`); 
+            safeSetClass('m2CostoReal', `text-xl font-black text-${clB}-${ep>0?600:700} mt-1 transition-colors`);
+            safeSetClass('m2PctIndicator', `absolute bottom-0 left-0 w-full h-1.5 bg-${clB}-${ep>0?500:500} transition-colors`); 
+            safeSetClass('m2PctVariacion', `text-xl font-black text-${clB}-${ep>0?600:700} mt-1 transition-colors`);
+        };
+
+        // TABLAS
+        window.renderBudgetTable = () => {
+            const tb = document.getElementById('budgetTableBody'); if(!tb) return;
+            const fr = parseFloat(getVal('adminFeeInput'))||0; const mul = 1+(fr/100);
+            const bDict = {}; 
+            window.budgetData.forEach(b => { if(!bDict[b.disciplina]) bDict[b.disciplina] = { p: 0, e: 0 }; bDict[b.disciplina].p += b.montoUSD; }); 
+            window.trendFilteredData.forEach(tx => { if(bDict[tx.disciplina]) bDict[tx.disciplina].e += (tx.costo * mul); });
+            
+            let h = ''; let tP = 0; let tE = 0; const sortedAreas = Object.keys(bDict).sort();
+            if(sortedAreas.length === 0) { 
+                tb.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-gray-500 text-xs">No hay presupuestos asignados.</td></tr>'; 
+                safeSetText('m2JustificadoTotal', "$0.00"); return; 
+            }
+            
+            sortedAreas.forEach(area => {
+                const data = bDict[area]; tP += data.p; tE += data.e; const disp = data.p - data.e; const pct = data.p > 0 ? (data.e / data.p) * 100 : (data.e > 0 ? 100 : 0);
+                const pctCls = pct > 100 ? 'bg-red-500' : (pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'); const txtCls = pct > 100 ? 'text-red-600' : 'text-gray-700';
+                h += `
+                <tr class="border-b border-gray-100 hover:bg-purple-50/30 transition group/bud">
+                    <td class="py-2 px-3 text-[11px] font-bold text-indigo-800">${safeHtml(area)}</td>
+                    <td class="py-2 px-3 text-[11px] text-right font-semibold text-sky-700 bg-sky-50/30">${formatCurrency(data.p)}</td>
+                    <td class="py-2 px-3 text-[11px] text-right text-rose-600 font-semibold bg-rose-50/30">${formatCurrency(data.e)}</td>
+                    <td class="py-2 px-3 text-[11px] text-right font-bold ${disp < 0 ? 'text-red-600 bg-red-50' : 'text-emerald-600'}">${formatCurrency(disp)}</td>
+                    <td class="py-2 px-3 text-[11px] text-right font-bold ${txtCls}">${pct.toFixed(1)}%</td>
+                    <td class="py-2 px-3"><div class="w-full bg-gray-200 rounded-full h-1.5"><div class="${pctCls} h-1.5 rounded-full" style="width:${Math.min(pct, 100)}%"></div></div></td>
+                    <td class="py-2 px-3 text-center">
+                        <button onclick="window.openBudgetModal('${safeJs(area)}', ${data.p})" class="text-indigo-500 hover:text-indigo-700 mr-2" title="Editar Presupuesto"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
+                        <button onclick="window.promptDeleteTransaction('${safeJs(area)}', event, 'budget')" class="text-red-400 hover:text-red-600" title="Eliminar Presupuesto"><i class="fa-solid fa-trash text-sm"></i></button>
+                    </td>
+                </tr>`;
+            });
+            h += `<tr class="bg-gray-100 border-t border-gray-300 font-black"><td class="py-2 px-3 text-[11px] text-gray-800">TOTALES DETALLADOS</td><td class="py-2 px-3 text-[11px] text-right text-sky-800">${formatCurrency(tP)}</td><td class="py-2 px-3 text-[11px] text-right text-rose-800">${formatCurrency(tE)}</td><td class="py-2 px-3 text-[11px] text-right ${tP-tE < 0 ? 'text-red-700' : 'text-emerald-700'}">${formatCurrency(tP-tE)}</td><td class="py-2 px-3 text-[11px] text-right text-gray-800">${tP > 0 ? ((tE/tP)*100).toFixed(1) : 0}%</td><td colspan="2"></td></tr>`;
+            tb.innerHTML = h; safeSetText('m2JustificadoTotal', formatCurrency(tP));
+        };
+
+        window.renderContratosTable = () => {
+            const tb = document.getElementById('contratosTableBody'); if(!tb) return;
+            if(window.contratosData.length === 0) { tb.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-500 text-xs">No hay contratos registrados.</td></tr>'; return; }
+            const cDict = {};
+            window.contratosData.forEach(c => { if(!cDict[c.proveedor]) cDict[c.proveedor] = { n: c.proveedor, contratado: 0, pagado: 0, tx: [] }; cDict[c.proveedor].contratado += c.montoUSD; cDict[c.proveedor].tx.push(c); });
+            window.rawData.forEach(tx => { if(cDict[tx.proveedor]) { const pagado = tx.montoPagado !== undefined ? tx.montoPagado : (tx.estadoPago==='PAGADO'?tx.costo:0); cDict[tx.proveedor].pagado += pagado; } });
+            
+            let h = ''; let tC = 0; let tP = 0;
+            Object.values(cDict).sort((a,b)=>a.n.localeCompare(b.n)).forEach((data, i) => {
+                tC += data.contratado; tP += data.pagado; const saldo = data.contratado - data.pagado; const pct = data.contratado > 0 ? (data.pagado / data.contratado) * 100 : 0; const pctCls = pct >= 100 ? 'bg-emerald-500' : 'bg-amber-500'; const did = 'ctr_row_' + i;
+                h += `
+                <tr class="border-b border-gray-100 hover:bg-amber-50 cursor-pointer group" onclick="document.getElementById('${did}').classList.toggle('hidden')">
+                    <td class="py-3 px-3 text-[11px] font-bold text-gray-800 flex items-center justify-between"><span><i class="fa-solid fa-chevron-down text-amber-500 mr-2"></i>${safeHtml(data.n)}</span></td>
+                    <td class="py-3 px-3 text-[11px] text-right font-semibold text-amber-700 bg-amber-50/30">${formatCurrency(data.contratado)}</td>
+                    <td class="py-3 px-3 text-[11px] text-right text-emerald-600 font-semibold">${formatCurrency(data.pagado)}</td>
+                    <td class="py-3 px-3 text-[11px] text-right font-bold ${saldo < 0 ? 'text-emerald-600' : 'text-gray-700'}">${formatCurrency(saldo)}</td>
+                    <td class="py-3 px-3"><div class="flex items-center space-x-2"><div class="w-full bg-gray-200 rounded-full h-1.5"><div class="${pctCls} h-1.5 rounded-full" style="width:${Math.min(pct, 100)}%"></div></div><span class="text-[9px] font-bold text-gray-500 w-8 text-right">${pct.toFixed(0)}%</span></div></td>
+                </tr>
+                <tr id="${did}" class="hidden bg-slate-50 shadow-inner"><td colspan="5" class="p-4">
+                    <table class="w-full text-left bg-white border border-gray-200 rounded shadow-sm"><thead class="bg-gray-100"><tr><th class="py-2 px-2 text-[9px] text-gray-500 w-[90px]">Fecha</th><th class="py-2 px-2 text-[9px] text-gray-500">Descripción del Contrato</th><th class="py-2 px-2 text-[9px] text-right w-[100px]">Monto USD</th><th class="py-2 px-2 text-[9px] text-center w-[60px]">Acciones</th></tr></thead><tbody>`;
+                data.tx.sort((a,b)=>window.parseDateForSort(b.fecha)-window.parseDateForSort(a.fecha)).forEach(c => {
+                    h += `<tr class="border-t border-gray-100 group/sub">
+                        <td class="py-1 px-2 text-[11px]">${c.fecha}</td>
+                        <td class="py-1 px-2 text-[11px]"><div class="flex justify-between"><span class="truncate pr-1" title="${safeHtml(c.descripcion)}">${safeHtml(c.descripcion)}</span></div></td>
+                        <td class="py-1 px-2 text-[11px] text-right font-semibold"><div class="flex justify-end items-center"><span>${formatCurrency(c.montoUSD)}</span></div></td>
+                        <td class="py-1 px-2 text-center">
+                            <button onclick="window.abrirEditarContrato('${c.id}', event)" class="text-indigo-500 hover:text-indigo-700 mr-2" title="Editar Contrato"><i class="fa-solid fa-pen-to-square text-[10px]"></i></button>
+                            <button onclick="window.promptDeleteTransaction('${c.id}', event, 'contrato')" class="text-red-400 hover:text-red-600" title="Eliminar Contrato"><i class="fa-solid fa-trash text-[10px]"></i></button>
+                        </td>
+                    </tr>`;
+                });
+                h += `</tbody></table></td></tr>`;
+            });
+            h += `<tr class="bg-gray-100 border-t border-gray-300 font-black"><td class="py-2 px-3 text-[11px] text-gray-800">TOTALES GENERALES</td><td class="py-2 px-3 text-[11px] text-right text-amber-800">${formatCurrency(tC)}</td><td class="py-2 px-3 text-[11px] text-right text-emerald-800">${formatCurrency(tP)}</td><td class="py-2 px-3 text-[11px] text-right text-gray-800">${formatCurrency(tC-tP)}</td><td></td></tr>`;
+            tb.innerHTML = h;
+        };
+
+        window.renderIngresosTable = () => {
+            const tb = document.getElementById('ingresosTableBody'); 
+            if(!tb) return; 
+            tb.innerHTML = ''; 
+            const pK = window.viewMode === 'WEEK' ? 'semana' : 'mes';
+            
+            if(window.filteredIngresos.length === 0) {
+                tb.innerHTML = '<tr><td colspan="9" class="py-4 text-center text-gray-500 text-xs">No hay ingresos registrados.</td></tr>';
+                return;
+            }
+            
+            let h = ''; 
+            [...window.filteredIngresos].sort((a,b) => window.parseDateForSort(b.fecha) - window.parseDateForSort(a.fecha)).forEach(i => {
+                const origen = safeHtml(i.origen);
+                const desc = safeHtml(i.descripcion);
+                const pago = safeHtml(i.formaPago || '-');
+                const montoOrig = i.moneda === 'VES' ? formatCurrencyVES(i.monto) : formatCurrency(i.monto);
+                const tasa = i.moneda === 'VES' ? parseFloat(i.tasa).toFixed(2) : '-';
+                const montoUSD = formatCurrency(i.montoUSD);
+                const link = i.linkComprobante ? `<a href="${i.linkComprobante}" target="_blank" class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold">Ver</a>` : `-`;
+
+                h += `
+                <tr class="border-b border-gray-100 hover:bg-emerald-50/30">
+                    <td class="py-2 px-2 text-[11px] text-gray-600 w-[90px]">${i.fecha||i[pK]}</td>
+                    <td class="py-2 px-2 text-[11px] font-semibold text-gray-800 truncate max-w-[120px]" title="${origen}">${origen}</td>
+                    <td class="py-2 px-2 text-[11px] text-gray-600 truncate max-w-[200px] sm:max-w-[300px]" title="${desc}">${desc}</td>
+                    <td class="py-2 px-2 text-[11px] text-gray-600">${pago}</td>
+                    <td class="py-2 px-2 text-center">${link}</td>
+                    <td class="py-2 px-2 text-[11px] text-right bg-gray-50">${montoOrig} <span class="text-[9px]">${i.moneda}</span></td>
+                    <td class="py-2 px-2 text-[11px] text-right bg-gray-50">${tasa}</td>
+                    <td class="py-2 px-2 text-[12px] font-bold text-emerald-700 text-right bg-emerald-50/50">${montoUSD}</td>
+                    <td class="py-2 px-2 text-center">
+                        <button onclick="window.abrirEditarIngreso('${i.id}', event)" class="text-indigo-500 hover:text-indigo-700 mr-3" title="Editar Ingreso Completo"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+                        <button onclick="window.promptDeleteTransaction('${i.id}', event, 'tx')" class="text-red-400 hover:text-red-600" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </td>
+                </tr>`;
+            }); 
+            tb.innerHTML = h;
+        };
+
+        window.renderProviderTable = () => {
+            const searchTerm = document.getElementById('providerSearchInput') ? document.getElementById('providerSearchInput').value : '';
+            const tb = document.getElementById('proveedoresTableBody'); 
+            if(!tb) return; 
+            tb.innerHTML = ''; 
+            const fr = parseFloat(getVal('adminFeeInput')) || 0; 
+            const mul = 1 + (fr / 100);
+            const pK = window.viewMode === 'WEEK' ? 'semana' : 'mes';
+            
+            if(window.filteredData.length === 0) {
+                tb.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-gray-500">No hay gastos.</td></tr>';
+                return;
+            }
+            
+            const g = {}; 
+            let tGb = 0; 
+            window.filteredData.forEach(d => { 
+                tGb += d.costo; 
+                if(!g[d.proveedor]) g[d.proveedor] = { n: d.proveedor, vb: 0, vp: 0, tx: [] }; 
+                g[d.proveedor].vb += d.costo; 
+                const sld = d.costo - (d.montoPagado !== undefined ? d.montoPagado : (d.estadoPago === 'PAGADO' ? d.costo : 0)); 
+                if(d.estadoPago === 'PENDIENTE' && sld > 0) {
+                    g[d.proveedor].vp += sld; 
+                }
+                g[d.proveedor].tx.push(d); 
+            });
+
+            let pA = Object.values(g); 
+            if(fr > 0 && tGb > 0) {
+                const adminDelegadaDeuda = window.filteredData.filter(d => d.estadoPago === 'PENDIENTE').reduce((s,d) => s + (d.costo - (d.montoPagado !== undefined ? d.montoPagado : (d.estadoPago === 'PAGADO' ? d.costo : 0))), 0) * (fr / 100);
+                pA.push({
+                    n: '🏢 ADMINISTRACIÓN DELEGADA',
+                    vb: tGb * (fr / 100),
+                    vp: adminDelegadaDeuda,
+                    tx: [],
+                    isV: true
+                });
+            }
+            
+            pA.sort((a,b) => { 
+                let m = currentSort.direction === 'asc' ? 1 : -1; 
+                if(currentSort.column === 'name') return a.n.localeCompare(b.n) * m; 
+                if(currentSort.column === 'pendiente') return (a.vp - b.vp) * m; 
+                return (a.vb - b.vb) * m; 
+            });
+            
+            if(searchTerm) {
+                const lowerTerm = searchTerm.toLowerCase();
+                pA = pA.filter(p => p.n.toLowerCase().includes(lowerTerm) || p.tx.some(t => t.descripcion.toLowerCase().includes(lowerTerm)));
+            }
+            
+            if(pA.length === 0) {
+                tb.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-gray-500">No hay datos.</td></tr>';
+                return;
+            }
+            
+            let ht = ''; 
+            const tSum = tGb * mul;
+            
+            pA.forEach((p, i) => {
+                const pct = (tSum > 0) ? (p.vb / tSum) * 100 : 0; 
+                const did = 'pd_' + i; 
+                const isExp = expandedProviders.has(p.n); 
+                const rC = isExp ? "" : "hidden ";
+                const iC = isExp ? "fa-chevron-down text-rose-500" : "fa-chevron-right text-gray-400";
+                
+                const provName = safeHtml(p.n);
+                let pN = p.isV ? 
+                    `<div><i id="icon_${did}" class="fa-solid ${iC} text-indigo-500"></i> <span class="font-bold text-indigo-700">${provName}</span></div>` : 
+                    `<div><i id="icon_${did}" class="fa-solid ${iC}"></i> ${provName} <span class="text-xs text-gray-400 ml-1">(${p.tx.length})</span></div>`;
+                
+                ht += `
+                <tr class="border-b border-gray-100 hover:bg-rose-50 cursor-pointer group" onclick="document.getElementById('${did}').classList.toggle('hidden')">
+                    <td class="py-3 px-4 font-medium flex items-center justify-between">${pN}</td>
+                    <td class="py-3 px-4 font-semibold text-right">${formatCurrency(p.vb)}</td>
+                    <td class="py-3 px-4 text-right">${p.vp > 0 ? `<span class="text-red-600 font-bold">${formatCurrency(p.vp)}</span>` : '-'}</td>
+                    <td class="py-3 px-4 text-gray-500 text-right">${pct.toFixed(2)}%</td>
+                    <td class="py-3 px-4"><div class="w-full bg-gray-200 rounded-full h-2"><div class="${p.isV ? 'bg-indigo-500' : 'bg-rose-500'} h-2 rounded-full" style="width:${pct}%"></div></div></td>
+                </tr>
+                <tr id="${did}" class="${rC}bg-slate-50 shadow-inner"><td colspan="5" class="p-4">`;
+                
+                if(p.isV) {
+                    ht += `<p class="text-sm text-indigo-700 font-medium">Honorarios calculados al ${fr}%.</p>`;
+                } else {
+                    ht += `<table class="w-full text-left bg-white border border-gray-200 rounded shadow-sm"><thead class="bg-gray-100"><tr><th class="py-2 px-2 text-[9px] text-gray-500 w-[90px]">Fecha</th><th class="py-2 px-2 text-[9px] text-gray-500">Descripción y Área</th><th class="py-2 px-2 text-[9px] text-gray-500 text-center w-[70px]">Estado</th><th class="py-2 px-2 text-[9px] text-right w-[80px]">Total Neto</th><th class="py-2 px-2 text-[9px] text-right w-[80px]">Pagado</th><th class="py-2 px-2 text-[9px] text-center w-[70px]">Soportes</th><th class="py-2 px-2 text-[9px] text-center w-[60px]">Acciones</th></tr></thead><tbody>`;
+                    
+                    p.tx.sort((a,b) => window.parseDateForSort(b.fecha) - window.parseDateForSort(a.fecha)).forEach(t => {
+                        const desc = safeHtml(t.descripcion);
+                        const area = safeHtml(t.disciplina);
+                        const estBdg = t.estadoPago === 'PENDIENTE' ? '<span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-100 text-red-700">PENDIENTE</span>' : '<span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-emerald-100 text-emerald-700">PAGADO</span>';
+                        
+                        let spts = ''; 
+                        if(t.linkFactura) spts += `<a href="${t.linkFactura}" target="_blank" class="bg-blue-100 text-blue-700 px-1 py-1 rounded text-[8px] font-bold mr-1">Fac.</a>`; 
+                        if(t.linkComprobante) spts += `<a href="${t.linkComprobante}" target="_blank" class="bg-emerald-100 text-emerald-700 px-1 py-1 rounded text-[8px] font-bold">Pago</a>`;
+                        
+                        const montoNeto = formatCurrency(t.costo);
+                        const montoPagadoFormat = formatCurrency(t.montoPagado !== undefined ? t.montoPagado : (t.estadoPago === 'PAGADO' ? t.costo : 0));
+                        
+                        ht += `
+                        <tr class="border-t border-gray-100 hover:bg-gray-50">
+                            <td class="py-2 px-2 text-[11px] w-[90px]">${t.fecha}</td>
+                            <td class="py-2 px-2 text-[11px] max-w-[200px] sm:max-w-[350px]">
+                                <div class="truncate font-semibold" title="${desc}">${desc}</div>
+                                <div class="text-[9px] text-gray-400 mt-0.5 uppercase">${area}</div>
+                            </td>
+                            <td class="py-2 px-2 text-[11px] text-center cursor-pointer" onclick="window.toggleEstado('${t.id}',event)">${estBdg}</td>
+                            <td class="py-2 px-2 text-[11px] font-bold text-right">${montoNeto}</td>
+                            <td class="py-2 px-2 text-[11px] text-right font-semibold text-emerald-600">${montoPagadoFormat}</td>
+                            <td class="py-2 px-2 text-center">${spts||'-'}</td>
+                            <td class="py-2 px-2 text-center">
+                                <button onclick="window.abrirEditarGasto('${t.id}', event)" class="text-indigo-500 hover:text-indigo-700 mr-2" title="Editar Gasto Completo"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
+                                <button onclick="window.promptDeleteTransaction('${t.id}', event, 'tx')" class="text-red-400 hover:text-red-600" title="Eliminar"><i class="fa-solid fa-trash text-sm"></i></button>
+                            </td>
+                        </tr>`;
+                    }); 
+                    ht += `</tbody></table>`;
+                } 
+                ht += `</td></tr>`;
+            }); 
+            tb.innerHTML = ht;
+        };
+
+        window.renderDeudasTable = () => {
+            const tb=document.getElementById('deudasTableBody'); if(!tb)return; tb.innerHTML='';
+            const deudas = window.filteredData.filter(d => d.estadoPago==='PENDIENTE' && d.costo > (d.montoPagado||0)).sort((a,b)=>window.parseDateForSort(b.fecha)-window.parseDateForSort(a.fecha));
+            if(deudas.length===0){tb.innerHTML='<tr><td colspan="7" class="py-4 text-center text-gray-500 text-xs">No hay deudas pendientes en este periodo.</td></tr>'; return;}
+            const mul=1+((parseFloat(getVal('adminFeeInput'))||0)/100); let h='';
+            deudas.forEach(d => {
+                const pag = d.montoPagado !== undefined ? d.montoPagado : (d.estadoPago==='PAGADO'?d.costo:0); const tot = d.costo * mul; const sld = (d.costo - pag) * mul;
+                h+=`<tr class="border-b border-gray-100 hover:bg-red-50/30 transition group"><td class="py-2 px-2 text-[11px] text-gray-600 w-[90px]">${d.fecha||'-'}</td><td class="py-2 px-2 text-[11px] font-semibold text-gray-800">${safeHtml(d.proveedor)}</td><td class="py-2 px-2 text-[11px] text-gray-600 truncate max-w-[200px] sm:max-w-[300px]" title="${safeHtml(d.descripcion)}">${safeHtml(d.descripcion)}</td><td class="py-2 px-2 text-[11px] font-semibold text-right bg-gray-50">${formatCurrency(tot)}</td><td class="py-2 px-2 text-[11px] font-semibold text-emerald-600 text-right bg-emerald-50/30">${formatCurrency(pag * mul)}</td><td class="py-2 px-2 text-[12px] font-bold text-red-700 text-right bg-red-50/50">${formatCurrency(sld)}</td><td class="py-2 px-2 text-center"><button onclick="window.openAbonoModal('${d.id}', event)" class="bg-sky-100 text-sky-700 hover:bg-sky-200 px-2 py-1 rounded text-[9px] font-bold shadow-sm transition"><i class="fa-solid fa-hand-holding-dollar mr-1"></i>Abonar</button></td></tr>`;
+            }); tb.innerHTML=h;
+        };
+
+        window.toggleEstado = (id,e) => { if(e)e.stopPropagation(); const tx=window.rawData.find(d=>d.id===id); if(tx){tx.estadoPago=tx.estadoPago==='PENDIENTE'?'PAGADO':'PENDIENTE'; if(tx.estadoPago==='PAGADO') tx.montoPagado = tx.costo; window.showToast("Estado: "+tx.estadoPago,"success"); window.applyFilters(); window.backupLocal(); } };
+        
+        window.toggleSort = (col) => { currentSort.direction=(currentSort.column===col&&currentSort.direction==='desc')?'asc':'desc'; currentSort.column=col; window.renderProviderTable(); };
+
+        // FUNCIONES DE BÚSQUEDA
+        window.executeSearch = (term) => {
+            const tb = document.getElementById('searchResultsBody'); const totEl = document.getElementById('searchTotalAmount'); if (!tb || !totEl) return;
+            if (!term || term.trim() === '') { tb.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-gray-500">Escribe para buscar...</td></tr>'; totEl.innerHTML = ''; return; }
+            const q = term.toLowerCase().trim(); const mul = 1 + ((parseFloat(getVal('adminFeeInput')) || 0) / 100);
+            const matchIng = window.rawIngresos.filter(i => i.descripcion.toLowerCase().includes(q)); const matchGas = window.rawData.filter(g => g.descripcion.toLowerCase().includes(q));
+            let h = ''; let totIng = 0; let totGas = 0;
+            matchIng.sort((a,b)=>window.parseDateForSort(b.fecha)-window.parseDateForSort(a.fecha)).forEach(i => {
+                totIng += i.montoUSD;
+                h += `<tr class="border-b border-gray-100 hover:bg-emerald-50"><td class="py-2 px-2 text-[11px] w-[90px]">${i.fecha}</td><td class="py-2 px-2 text-[11px] font-bold text-emerald-600 w-[80px]">INGRESO</td><td class="py-2 px-2 text-[11px] truncate max-w-[100px]">${safeHtml(i.origen)}</td><td class="py-2 px-2 text-[11px] truncate max-w-[200px]" title="${safeHtml(i.descripcion)}">${safeHtml(i.descripcion)}</td><td class="py-2 px-2 text-[11px] text-right font-bold text-emerald-700">${formatCurrency(i.montoUSD)}</td><td class="py-2 px-2 text-center"><button onclick="window.abrirEditarIngreso('${i.id}', event); window.closeM('searchModal');" class="text-indigo-500 hover:text-indigo-700"><i class="fa-solid fa-pen-to-square"></i></button></td></tr>`;
+            });
+            matchGas.sort((a,b)=>window.parseDateForSort(b.fecha)-window.parseDateForSort(a.fecha)).forEach(g => {
+                const val = g.costo * mul; totGas += val;
+                h += `<tr class="border-b border-gray-100 hover:bg-rose-50"><td class="py-2 px-2 text-[11px] w-[90px]">${g.fecha}</td><td class="py-2 px-2 text-[11px] font-bold text-rose-600 w-[80px]">GASTO</td><td class="py-2 px-2 text-[11px] truncate max-w-[100px]">${safeHtml(g.proveedor)}</td><td class="py-2 px-2 text-[11px] truncate max-w-[200px]" title="${safeHtml(g.descripcion)}">${safeHtml(g.descripcion)}</td><td class="py-2 px-2 text-[11px] text-right font-bold text-rose-700">${formatCurrency(val)}</td><td class="py-2 px-2 text-center"><button onclick="window.abrirEditarGasto('${g.id}', event); window.closeM('searchModal');" class="text-indigo-500 hover:text-indigo-700"><i class="fa-solid fa-pen-to-square"></i></button></td></tr>`;
+            });
+            if (h === '') { tb.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-gray-500">No se encontraron resultados.</td></tr>'; totEl.innerHTML = ''; } 
+            else { tb.innerHTML = h; totEl.innerHTML = `<span class="text-emerald-600 mr-4">Total Ingresos: ${formatCurrency(totIng)}</span> <span class="text-rose-600">Total Gastos: ${formatCurrency(totGas)}</span>`; }
+        };
+
+        // ABONOS
+        window.openAbonoModal = (id, evt) => {
+            if(evt) evt.stopPropagation();
+            const tx = window.rawData.find(d => d.id === id); if(!tx) return;
+            const fr = parseFloat(getVal('adminFeeInput')) || 0; const mul = 1 + (fr / 100);
+            const pagado = (tx.montoPagado !== undefined ? tx.montoPagado : (tx.estadoPago==='PAGADO'?tx.costo:0));
+            const total = tx.costo * mul; const pagadoMul = pagado * mul; const saldo = total - pagadoMul;
+            safeVal('abonoId', id); safeSetText('abonoTotalDisplay', formatCurrency(total)); safeSetText('abonoPagadoDisplay', formatCurrency(pagadoMul)); safeSetText('abonoSaldoDisplay', formatCurrency(saldo));
+            window._currentAbonoSaldoUSD = tx.costo - pagado;
+            safeVal('abonoMoneda', 'USD'); safeVal('abonoMonto', ''); safeVal('abonoTasa', '1'); document.getElementById('abonoTasa').disabled = true; safeSetText('abonoEquivUSD', '$0.00');
+            window.openM('abonoModal');
+        };
+        
+        window.fillAbonoRestante = () => { const mon = getVal('abonoMoneda'); const t = parseFloat(getVal('abonoTasa')) || 1; const saldoUSD = window._currentAbonoSaldoUSD || 0; let amt = mon === 'VES' ? saldoUSD * t : saldoUSD; safeVal('abonoMonto', amt.toFixed(2)); document.getElementById('abonoMonto')?.dispatchEvent(new Event('input')); };
+        
+        window.saveAbono = () => {
+            const id = getVal('abonoId'); const m = parseFloat(getVal('abonoMonto')); const mon = getVal('abonoMoneda'); const t = parseFloat(getVal('abonoTasa')) || 1;
+            if (isNaN(m) || m <= 0) return window.showToast("Monto inválido", "error");
+            const usd = mon === 'VES' ? m / t : m;
+            const idx = window.rawData.findIndex(x => x.id === id);
+            if (idx > -1) {
+                let tx = window.rawData[idx]; let currentPagado = tx.montoPagado !== undefined ? tx.montoPagado : (tx.estadoPago==='PAGADO'?tx.costo:0);
+                tx.montoPagado = currentPagado + usd;
+                if (tx.montoPagado >= tx.costo - 0.01) { tx.montoPagado = tx.costo; tx.estadoPago = 'PAGADO'; window.showToast("Deuda liquidada", "success"); } else { window.showToast("Abono registrado", "success"); }
+                window.populateFilters(); window.applyFilters(); window.backupLocal(); window.closeM('abonoModal');
+            }
+        };
+
+        // ACCIONES MODALES MAESTRAS
+        window.actualizarListas = () => {
+            const proveedores = [...new Set([...window.rawData.map(d=>d.proveedor), ...window.contratosData.map(c=>c.proveedor), ...window.rawIngresos.map(i=>i.origen)])].filter(Boolean).sort();
+            const tipos = [...new Set(window.rawData.map(d=>d.tipo))].filter(Boolean).sort();
+            const areas = [...new Set([...window.rawData.map(d=>d.disciplina), ...window.budgetData.map(b=>b.disciplina)])].filter(Boolean).sort();
+            
+            ['provList', 'ingOrigenList'].forEach(id => {
+                const lst = document.getElementById(id);
+                if (lst) { lst.innerHTML = ''; proveedores.forEach(v => { const o = document.createElement('option'); o.value = v; lst.appendChild(o); }); }
+            });
+            const lstTipo = document.getElementById('tipoList');
+            if (lstTipo) { lstTipo.innerHTML = ''; tipos.forEach(v => { const o = document.createElement('option'); o.value = v; lstTipo.appendChild(o); }); }
+            
+            const lstArea = document.getElementById('areaList');
+            if (lstArea) { lstArea.innerHTML = ''; areas.forEach(v => { const o = document.createElement('option'); o.value = v; lstArea.appendChild(o); }); }
+        };
+
+        window.openBudgetModal = (area='', monto='') => { window.actualizarListas(); safeVal('budgetArea', area); safeVal('budgetMonto', monto); window.openM('budgetModal'); };
+        window.saveBudget = () => { const a=getVal('budgetArea').toUpperCase().trim(), m=parseFloat(getVal('budgetMonto')); if(!a||isNaN(m)) return window.showToast("Datos inválidos", "error"); window.budgetData = window.budgetData.filter(b=>b.disciplina!==a); if(m>0) window.budgetData.push({id:'bud_'+Math.random().toString(36).substr(2), disciplina:a, montoUSD:m, fecha:new Date().toISOString().split('T')[0]}); window.showToast("Presupuesto Guardado", "success"); window.populateFilters(); window.applyFilters(); window.closeM('budgetModal'); window.backupLocal(); };
+
+        window.openContratoModal = () => { window.actualizarListas(); safeVal('editCtrId', ''); safeVal('ctrFecha', new Date().toISOString().split('T')[0]); ['ctrProveedor','ctrDesc','ctrMonto'].forEach(id=>safeVal(id,'')); window.openM('contratoModal'); };
+        window.abrirEditarContrato = (id, e) => { 
+            if(e) e.stopPropagation(); 
+            window.actualizarListas(); 
+            const c = window.contratosData.find(x => x.id === id); 
+            if(!c) return; 
+            safeVal('editCtrId', c.id); safeVal('ctrFecha', c.fecha); safeVal('ctrProveedor', c.proveedor); safeVal('ctrDesc', c.descripcion); safeVal('ctrMonto', c.montoUSD); 
+            window.openM('contratoModal'); 
+        };
+        window.saveContrato = () => { 
+            const p=getVal('ctrProveedor').toUpperCase().trim(), d=getVal('ctrDesc').trim(), m=parseFloat(getVal('ctrMonto')), f=getVal('ctrFecha'), editId=getVal('editCtrId'); 
+            if(!p||isNaN(m)) return window.showToast("Datos inválidos", "error"); 
+            if(editId) {
+                const idx = window.contratosData.findIndex(x => x.id === editId);
+                if(idx > -1) { 
+                    window.contratosData[idx] = {id: editId, fecha: f, proveedor: p, descripcion: d || 'Contrato General', montoUSD: m}; 
+                    window.showToast("Contrato Actualizado", "success"); 
+                }
+            } else {
+                window.contratosData.push({id:'ctr_'+Math.random().toString(36).substr(2), fecha:f, proveedor:p, descripcion:d||'Contrato General', montoUSD:m}); 
+                window.showToast("Contrato Guardado", "success"); 
+            }
+            window.populateFilters(); window.applyFilters(); window.closeM('contratoModal'); window.backupLocal(); 
+        };
+
+        window.openAddIngresoModal = () => { window.actualizarListas(); safeVal('addIngFecha', new Date().toISOString().split('T')[0]); ['addIngMonto','addIngFormaPago','addIngLinkComprobante','addIngDescripcion'].forEach(id=>safeVal(id,'')); safeVal('addIngMoneda','USD'); safeVal('addIngTasa','1'); document.getElementById('addIngTasa').disabled=true; safeSetText('addIngEquivUSD','$0.00'); safeVal('addIngOrigen',getTxt('ownerName')); window.openM('addIngresoModal'); };
+        window.saveNewIngreso = () => { const f=getVal('addIngFecha'), m=parseFloat(getVal('addIngMonto')), mon=getVal('addIngMoneda'), t=parseFloat(getVal('addIngTasa'))||1; if(!f||isNaN(m))return window.showToast("Error","error"); window.rawIngresos.push({id:'ing_'+Math.random().toString(36).substr(2),fecha:f,mes:window.getMonthYearFromDate(f),semana:window.getWeekYearFromDate(f),origen:getVal('addIngOrigen').toUpperCase()||'CLI',descripcion:getVal('addIngDescripcion')||'Ingreso',moneda:mon,monto:m,tasa:t,montoUSD:mon==='USD'?m:m/t,formaPago:getVal('addIngFormaPago').toUpperCase(),linkComprobante:getVal('addIngLinkComprobante'),estadoPago:'PAGADO'}); window.showToast("Guardado","success"); window.populateFilters(); window.applyFilters(); window.closeM('addIngresoModal'); window.backupLocal(); };
+
+        window.openAddRecordModal = () => { window.actualizarListas(); safeVal('addFecha', new Date().toISOString().split('T')[0]); ['addMontoOriginal','addProveedor','addDescripcion','addTipo','addArea','addFormaPago','addLinkFactura','addLinkComprobante'].forEach(id=>safeVal(id,'')); safeVal('addMoneda','USD'); safeVal('addTasa','1'); safeVal('addEstadoPago','PAGADO'); safeSetText('addMontoEquivUSD','$0.00'); const lc = document.getElementById('lastRecordInfoContainer'), ld = document.getElementById('lastRecordDetails'); if (window.rawData.length > 0) { const lr = window.rawData[window.rawData.length - 1]; if(ld) ld.innerHTML = `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2"><div><span class="text-indigo-400 block text-[9px] uppercase">Fecha</span> ${lr.fecha}</div><div><span class="text-indigo-400 block text-[9px] uppercase">Base USD</span> ${formatCurrency(lr.costo)}</div><div class="md:col-span-2"><span class="text-indigo-400 block text-[9px] uppercase">Proveedor</span> <span class="truncate block w-full">${lr.proveedor}</span></div><div class="md:col-span-2"><span class="text-indigo-400 block text-[9px] uppercase">Descripción</span> <span class="truncate block w-full">${lr.descripcion}</span></div><div><span class="text-indigo-400 block text-[9px] uppercase">Categoría</span> <span class="truncate block">${lr.tipo}</span></div><div><span class="text-indigo-400 block text-[9px] uppercase">Área</span> <span class="truncate block">${lr.disciplina}</span></div></div>`; if(lc) lc.classList.remove('hidden'); } else { if(lc) lc.classList.add('hidden'); } window.openM('addRecordModal'); };
+        window.saveNewRecord = () => { const f=getVal('addFecha'), m=parseFloat(getVal('addMontoOriginal')), mon=getVal('addMoneda'), t=parseFloat(getVal('addTasa'))||1, est=getVal('addEstadoPago'); if(!f||isNaN(m))return window.showToast("Error","error"); let tp=getVal('addTipo').toUpperCase(); tp=correccionesTipo[tp]||tp||'NO ESP'; const costoUSD = mon==='USD'?m:m/t; window.rawData.push({id:'tx_'+Math.random().toString(36).substr(2),fecha:f,mes:window.getMonthYearFromDate(f),semana:window.getWeekYearFromDate(f),tipo:tp,disciplina:getVal('addArea').toUpperCase()||'NO ESP',proveedor:getVal('addProveedor').toUpperCase()||'DESC',descripcion:getVal('addDescripcion')||'Sin desc',moneda:mon,tasa:t,montoOriginal:m,costo:costoUSD,montoPagado:(est==='PAGADO'?costoUSD:0),formaPago:getVal('addFormaPago').toUpperCase(),linkFactura:getVal('addLinkFactura'),linkComprobante:getVal('addLinkComprobante'),estadoPago:est}); window.showToast("Guardado","success"); window.populateFilters(); window.applyFilters(); window.closeM('addRecordModal'); window.backupLocal(); };
+
+        window.abrirEditarGasto = (id, e) => {
+            if(e) e.stopPropagation();
+            window.actualizarListas();
+            const d = window.rawData.find(x => x.id === id);
+            if(!d) return;
+            safeVal('editGastoId', d.id);
+            safeVal('editGastoFecha', d.fecha);
+            safeVal('editGastoEstado', d.estadoPago);
+            safeVal('editGastoMontoPagado', (d.montoPagado !== undefined ? d.montoPagado : (d.estadoPago==='PAGADO'?d.costo:0)).toFixed(2));
+            safeVal('editGastoMoneda', d.moneda);
+            safeVal('editGastoMontoOriginal', d.montoOriginal || d.costo);
+            safeVal('editGastoTasa', d.tasa);
+            safeVal('editGastoProveedor', d.proveedor);
+            safeVal('editGastoFormaPago', d.formaPago);
+            safeVal('editGastoDescripcion', d.descripcion);
+            safeVal('editGastoTipo', d.tipo);
+            safeVal('editGastoArea', d.disciplina);
+            safeVal('editGastoLinkFactura', d.linkFactura);
+            safeVal('editGastoLinkComprobante', d.linkComprobante);
+            safeSetText('editGastoEquivUSD', formatCurrency(d.costo));
+            const ti = document.getElementById('editGastoTasa'); if(ti) ti.disabled = (d.moneda === 'USD');
+            window.openM('editGastoModal');
+        };
+
+        window.cerrarEditarGasto = () => { window.closeM('editGastoModal'); };
+
+        window.guardarGastoEditado = () => {
+            const id = getVal('editGastoId'), f = getVal('editGastoFecha'), m = parseFloat(getVal('editGastoMontoOriginal')), mon = getVal('editGastoMoneda'), t = parseFloat(getVal('editGastoTasa')) || 1;
+            let est = getVal('editGastoEstado');
+            let tp = getVal('editGastoTipo').toUpperCase();
+            tp = correccionesTipo[tp] || tp || 'GENERAL';
+            
+            if(isNaN(m)) return window.showToast("Monto inválido", "error");
+            
+            const costoUSD = mon === 'USD' ? m : m / t;
+            let pagado = parseFloat(getVal('editGastoMontoPagado'));
+            if(isNaN(pagado)) pagado = est === 'PAGADO' ? costoUSD : 0;
+            if(pagado >= costoUSD - 0.01) { pagado = costoUSD; est = 'PAGADO'; }
+            
+            const idx = window.rawData.findIndex(x => x.id === id);
+            if(idx > -1) {
+                window.rawData[idx] = {
+                    id: id, fecha: f, mes: window.getMonthYearFromDate(f), semana: window.getWeekYearFromDate(f),
+                    tipo: tp, disciplina: getVal('editGastoArea').toUpperCase() || 'GENERAL',
+                    proveedor: getVal('editGastoProveedor').toUpperCase() || 'SIN ESPECIFICAR',
+                    descripcion: getVal('editGastoDescripcion') || 'Sin descripción',
+                    moneda: mon, tasa: t, montoOriginal: m, costo: costoUSD, montoPagado: pagado,
+                    formaPago: getVal('editGastoFormaPago').toUpperCase(),
+                    linkFactura: getVal('editGastoLinkFactura'), linkComprobante: getVal('editGastoLinkComprobante'), estadoPago: est
+                };
+                window.showToast("Gasto actualizado", "success");
+                window.populateFilters(); window.applyFilters(); window.backupLocal(); window.cerrarEditarGasto();
+            }
+        };
+
+        window.abrirEditarIngreso = (id, e) => {
+            if(e) e.stopPropagation();
+            window.actualizarListas();
+            const d = window.rawIngresos.find(x => x.id === id);
+            if(!d) return;
+            safeVal('editIngId', d.id);
+            safeVal('editIngFecha', d.fecha);
+            safeVal('editIngOrigen', d.origen);
+            safeVal('editIngFormaPago', d.formaPago);
+            safeVal('editIngMoneda', d.moneda);
+            safeVal('editIngMonto', d.monto);
+            safeVal('editIngTasa', d.tasa);
+            safeVal('editIngDescripcion', d.descripcion);
+            safeVal('editIngLinkComprobante', d.linkComprobante);
+            safeSetText('editIngEquivUSD', formatCurrency(d.montoUSD));
+            const ti = document.getElementById('editIngTasa'); if(ti) ti.disabled = (d.moneda === 'USD');
+            window.openM('editIngresoModal');
+        };
+
+        window.cerrarEditarIngreso = () => { window.closeM('editIngresoModal'); };
+
+        window.guardarIngresoEditado = () => {
+            const id = getVal('editIngId'), f = getVal('editIngFecha'), m = parseFloat(getVal('editIngMonto')), mon = getVal('editIngMoneda'), t = parseFloat(getVal('editIngTasa')) || 1;
+            if(isNaN(m)) return window.showToast("Monto inválido", "error");
+            
+            const idx = window.rawIngresos.findIndex(x => x.id === id);
+            if(idx > -1) {
+                window.rawIngresos[idx] = {
+                    id: id, fecha: f, mes: window.getMonthYearFromDate(f), semana: window.getWeekYearFromDate(f),
+                    origen: getVal('editIngOrigen').toUpperCase(), descripcion: getVal('editIngDescripcion'),
+                    moneda: mon, monto: m, tasa: t, montoUSD: mon === 'USD' ? m : m / t,
+                    formaPago: getVal('editIngFormaPago').toUpperCase(), linkComprobante: getVal('editIngLinkComprobante'), estadoPago: 'PAGADO'
+                };
+                window.showToast("Ingreso actualizado", "success");
+                window.populateFilters(); window.applyFilters(); window.backupLocal(); window.cerrarEditarIngreso();
+            }
+        };
+
+        window.promptDeleteTransaction = (id, e, type='tx') => { e.stopPropagation(); safeVal('deleteModalTxId',id); safeVal('deleteModalType',type); safeSetText('deleteModalTitle','¿Eliminar registro?'); window.openM('deleteConfirmModal'); };
+        window.executeDeleteTransaction = () => { const id=getVal('deleteModalTxId'), type=getVal('deleteModalType'); if(type==='budget'){ window.budgetData=window.budgetData.filter(b=>b.disciplina!==id); window.showToast("Presupuesto eliminado","success"); } else if(type==='contrato') { window.contratosData=window.contratosData.filter(c=>c.id!==id); window.showToast("Contrato eliminado","success"); } else { if(id.startsWith('ing')) window.rawIngresos=window.rawIngresos.filter(d=>d.id!==id); else window.rawData=window.rawData.filter(d=>d.id!==id); window.showToast("Eliminado","success"); } window.populateFilters(); window.applyFilters(); window.backupLocal(); window.closeM('deleteConfirmModal'); };
+
+        // GRÁFICOS Y EXPORTACIONES
+        const barLabelPlugin = {
+            id: 'barLabelPlugin',
+            afterDatasetsDraw(chart) {
+                try {
+                    if (chart.config.type !== 'bar' || !chart.chartArea) return;
+                    const { ctx, data, chartArea: { left } } = chart;
+                    ctx.save(); ctx.font = 'bold 10px Inter'; ctx.textBaseline = 'middle';
+                    const meta = chart.getDatasetMeta(0);
+                    if (!meta || !meta.data || meta.data.length === 0) { ctx.restore(); return; }
+                    const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+                    meta.data.forEach((dp, i) => {
+                        const value = data.datasets[0].data[i]; if (!value) return;
+                        const pct = total > 0 ? (value / total) * 100 : 0;
+                        const txt = formatCompact(value) + ' (' + pct.toFixed(1) + '%)';
+                        const x = dp.x; const y = dp.y; const w = ctx.measureText(txt).width;
+                        if (x - left > w + 15) { ctx.fillStyle = '#fff'; ctx.textAlign = 'right'; ctx.fillText(txt, x - 5, y + 1); } 
+                        else { ctx.fillStyle = '#475569'; ctx.textAlign = 'left'; ctx.fillText(txt, x + 5, y + 1); }
+                    });
+                    ctx.restore();
+                } catch (e) { console.warn("Plugin chart error", e); }
+            }
+        };
+
+        window.updateCharts = () => {
+            try {
+                if (typeof Chart === 'undefined') { setTimeout(window.updateCharts, 250); return; }
+                Chart.defaults.font.family = "'Inter', sans-serif"; 
+                
+                const pK = window.viewMode === 'WEEK' ? 'semana' : 'mes';
+                const fr = parseFloat(getVal('adminFeeInput')) || 0; 
+                const mul = 1 + (fr / 100);
+
+                let aP = [...new Set([...window.trendFilteredData.map(d => d[pK]), ...window.trendFilteredIngresos.map(d => d[pK])])].filter(m => m !== 'Desconocido').sort();
+                if (window.trendFilteredData.some(d => d[pK] === 'Desconocido')) aP.unshift('Desconocido');
+
+                let cIng = window.getTrendSeries(window.trendFilteredIngresos, 'montoUSD', pK, aP);
+                let cGas = window.getTrendSeries(window.trendFilteredData, 'costo', pK, aP, mul);
+                if (isChartAccumulated) { cIng = window.accumulateSeries(cIng); cGas = window.accumulateSeries(cGas); }
+
+                window.renderChart('trend', 'trendChart', 'line', { labels: aP, datasets: [ { label: 'Ingresos', data: cIng, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3 }, { label: 'Egresos', data: cGas, borderColor: '#f43f5e', backgroundColor: 'rgba(244,63,94,0.1)', fill: true, tension: 0.3 } ] }, { responsive: true, maintainAspectRatio: false });
+
+                let tD = window.aggregateData(window.filteredData, 'tipo');
+                if (fr > 0) tD.push({ name: 'ADMIN. DELEGADA', value: window.filteredData.reduce((s, d) => s + d.costo, 0) * (fr / 100) });
+                tD.sort((a, b) => b.value - a.value);
+                window.renderChart('type', 'typeChart', 'bar', { labels: tD.map(d => d.name), datasets: [{ data: tD.map(d => d.value), backgroundColor: globalColors }] }, { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }, [barLabelPlugin]);
+
+                let aD = window.aggregateData(window.filteredData, 'disciplina');
+                if (fr > 0) aD.push({ name: 'ADMIN. DELEGADA', value: window.filteredData.reduce((s, d) => s + d.costo, 0) * (fr / 100) });
+                aD.sort((a, b) => b.value - a.value);
+                const ac = document.getElementById('areaChartContainer'); if (ac) ac.style.height = Math.max(300, aD.length * 35) + 'px';
+                window.renderChart('area', 'areaChart', 'bar', { labels: aD.map(d => d.name), datasets: [{ data: aD.map(d => d.value), backgroundColor: globalColors }] }, { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }, [barLabelPlugin]);
+
+                let pD = window.aggregateData(window.filteredData, 'proveedor');
+                if (fr > 0) pD.push({ name: 'ADMIN. DELEGADA', value: window.filteredData.reduce((s, d) => s + d.costo, 0) * (fr / 100) });
+                pD.sort((a, b) => b.value - a.value);
+                const pc = document.getElementById('providerChartContainer'); if (pc) pc.style.height = Math.max(300, pD.length * 35) + 'px';
+                window.renderChart('provider', 'providerChart', 'bar', { labels: pD.map(d => d.name), datasets: [{ data: pD.map(d => d.value), backgroundColor: globalColors }] }, { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }, [barLabelPlugin]);
+
+                let deudasRaw = window.filteredData.filter(d => d.estadoPago === 'PENDIENTE' && d.costo > (d.montoPagado || 0));
+                let dd = deudasRaw.reduce((ac, r) => { ac[r.proveedor] = (ac[r.proveedor] || 0) + (r.costo - (r.montoPagado || 0)); return ac; }, {});
+                let ddArr = Object.entries(dd).map(([n, v]) => ({ name: n, value: v }));
+                if (mul > 1 && ddArr.length > 0) ddArr.push({ name: 'ADMIN. DELEGADA', value: deudasRaw.reduce((s, d) => s + (d.costo - (d.montoPagado || 0)), 0) * (fr / 100) });
+                ddArr.sort((a, b) => b.value - a.value);
+                window.renderChart('deuda', 'deudaChart', 'doughnut', { labels: ddArr.map(d => d.name), datasets: [{ data: ddArr.map(d => d.value), backgroundColor: globalColors }] }, { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 9 } } } } });
+
+            } catch (err) { console.warn("Gráficos en espera", err); }
+        };
+
+        window.renderChart = (k, id, t, d, o, p = []) => { const c = document.getElementById(id); if (!c) return; if (charts[k]) charts[k].destroy(); charts[k] = new Chart(c.getContext('2d'), { type: t, data: d, options: o, plugins: p }); };
+
+        window.exportMasterPDF = async () => {
+            if(window.rawData.length===0 && window.rawIngresos.length===0) return window.showToast("No hay datos", "error");
+            window.showToast("Generando Reporte Maestro...", "success");
+            const { jsPDF } = window.jspdf; const doc = new jsPDF('portrait');
+            const c = getTxt('companyName'), p = getTxt('projectName'), dateStr = new Date().toLocaleDateString();
+            const fr = parseFloat(getVal('adminFeeInput'))||0; const mul = 1+(fr/100);
+
+            const addHeader = (title) => { doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(`${title} - ${c}`, 14, 15); doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text(`Obra: ${p} | Fecha: ${dateStr}`, 14, 22); };
+
+            addHeader("Resumen Financiero Global");
+            doc.autoTable({ 
+                startY: 30, head: [["Concepto", "Monto"]], 
+                body: [ 
+                    ["Total Ingresos", getTxt('kpiTotalIngresosHist')], 
+                    ["Egresos Netos", getTxt('kpiTotalEgresosNetosHist')], 
+                    ["Admin. Delegada", getTxt('kpiTotalEgresosAdminHist')], 
+                    ["Costo Total Obra", getTxt('kpiTotalEgresosHist')], 
+                    ["  - Pagado", getTxt('kpiTotalPagado')], 
+                    ["  - Por Pagar", getTxt('kpiTotalPorPagar')], 
+                    ["Saldo en Caja", getTxt('kpiBalanceHist')], 
+                    ["", ""], 
+                    ["--- ANÁLISIS m² ---", ""], 
+                    ["Área", getVal('inputAreaM2')+" m²"], 
+                    ["Costo Base", formatCurrency(parseFloat(getVal('inputEstPriceM2'))||0)+" /m²"], 
+                    ["Presupuesto Total", getTxt('m2PresupuestoTotal')], 
+                    ["Costo Real Actual", getTxt('m2CostoReal')+" /m²"], 
+                    ["% Ejecutado", getTxt('m2PctVariacion')] 
+                ], 
+                theme: 'grid', headStyles: { fillColor: [79, 70, 229] }, columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } }, 
+                willDrawCell: (d)=>{ 
+                    if(d.row.index===0)d.cell.styles.textColor=[5,150,105]; 
+                    if(d.row.index===3)d.cell.styles.textColor=[225,29,72]; 
+                    if(d.row.index===6||d.row.index===8)d.cell.styles.fillColor=[243,244,246]; 
+                } 
+            });
+
+            const deudasActivas = window.filteredData.filter(d=>d.estadoPago==='PENDIENTE' && d.costo > (d.montoPagado||0));
+            if(deudasActivas.length > 0) {
+                const deudasProv = {}; let totalDeudaProv = 0;
+                deudasActivas.forEach(d => { 
+                    const sld = (d.costo - (d.montoPagado||0)) * mul; 
+                    deudasProv[d.proveedor] = (deudasProv[d.proveedor]||0) + sld; 
+                    totalDeudaProv += sld; 
+                });
+                const provRows = Object.keys(deudasProv).sort().map(prov => [prov, formatCurrency(deudasProv[prov])]);
+                provRows.push(["TOTAL DEUDA PENDIENTE", formatCurrency(totalDeudaProv)]);
+                doc.autoTable({ 
+                    startY: doc.lastAutoTable.finalY + 10, head: [["Resumen de Cuentas por Pagar", "Saldo"]], body: provRows, theme: 'grid', 
+                    headStyles: { fillColor: [220, 38, 38] }, columnStyles: { 1: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } }, 
+                    willDrawCell: (d)=>{ if(d.row.index===provRows.length-1)d.cell.styles.fillColor=[243,244,246]; } 
+                });
+            }
+
+            doc.addPage('a4', 'portrait'); addHeader("Control de Presupuestos");
+            const bDict = {}; 
+            window.budgetData.forEach(b => { if(!bDict[b.disciplina]) bDict[b.disciplina] = { p: 0, e: 0 }; bDict[b.disciplina].p += b.montoUSD; }); 
+            window.trendFilteredData.forEach(tx => { if(bDict[tx.disciplina]) bDict[tx.disciplina].e += (tx.costo * mul); });
+            const budgetRows = []; let tP=0, tE=0; 
+            Object.keys(bDict).sort().forEach(area => { 
+                const data = bDict[area]; tP+=data.p; tE+=data.e; const disp = data.p - data.e; const pct = data.p>0 ? (data.e/data.p)*100 : (data.e>0?100:0); 
+                budgetRows.push([area, formatCurrency(data.p), formatCurrency(data.e), formatCurrency(disp), pct.toFixed(1)+"%"]); 
+            }); 
+            budgetRows.push(["TOTALES", formatCurrency(tP), formatCurrency(tE), formatCurrency(tP-tE), (tP>0?((tE/tP)*100).toFixed(1):0)+"%"]);
+            doc.autoTable({ 
+                startY: 30, head: [["Área", "Presupuesto", "Ejecutado", "Disponible", "%"]], body: budgetRows, styles: {fontSize: 8}, 
+                headStyles: {fillColor: [147, 51, 234]}, columnStyles: { 1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right', fontStyle:'bold'} }, 
+                willDrawCell: (d)=>{ if(d.row.index===budgetRows.length-1) d.cell.styles.fillColor=[243,244,246]; } 
+            });
+
+            if(window.contratosData.length > 0) {
+                doc.addPage('a4', 'portrait'); addHeader("Control de Contratos");
+                const cDict = {}; 
+                window.contratosData.forEach(c => { if(!cDict[c.proveedor]) cDict[c.proveedor] = { c:0, p:0 }; cDict[c.proveedor].c += c.montoUSD; });
+                window.rawData.forEach(tx => { if(cDict[tx.proveedor]) cDict[tx.proveedor].p += (tx.montoPagado !== undefined ? tx.montoPagado : (tx.estadoPago==='PAGADO'?tx.costo:0)); });
+                const ctrRows = []; let tc=0, tp=0;
+                Object.keys(cDict).sort().forEach(prov => { 
+                    const d=cDict[prov]; tc+=d.c; tp+=d.p; 
+                    ctrRows.push([prov, formatCurrency(d.c), formatCurrency(d.p), formatCurrency(d.c-d.p)]); 
+                });
+                ctrRows.push(["TOTAL", formatCurrency(tc), formatCurrency(tp), formatCurrency(tc-tp)]);
+                doc.autoTable({ 
+                    startY: 30, head: [["Subcontratista", "Contratado", "Pagado", "Saldo"]], body: ctrRows, styles: {fontSize: 8}, 
+                    headStyles: {fillColor: [217, 119, 6]}, columnStyles: { 1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right', fontStyle: 'bold'} }, 
+                    willDrawCell: (d)=>{ if(d.row.index===ctrRows.length-1) d.cell.styles.fillColor=[243,244,246]; } 
+                });
+            }
+
+            doc.addPage('a4', 'landscape'); addHeader("Ingresos");
+            const ingRows = []; let tIng = 0; 
+            [...window.filteredIngresos].sort((a,b)=>window.parseDateForSort(a.fecha)-window.parseDateForSort(b.fecha)).forEach(i => { 
+                ingRows.push([i.fecha, i.origen, i.descripcion, i.formaPago||'-', formatCurrency(i.montoUSD)]); 
+                tIng += i.montoUSD; 
+            }); 
+            ingRows.push(["", "", "", "TOTAL:", formatCurrency(tIng)]);
+            doc.autoTable({ 
+                startY: 30, head: [["Fecha", "Origen", "Descripción", "Pago", "USD"]], body: ingRows, styles: {fontSize: 8}, 
+                headStyles: {fillColor: [16, 185, 129]}, columnStyles: { 4: {halign: 'right', fontStyle: 'bold'} } 
+            });
+
+            doc.addPage('a4', 'landscape'); addHeader("Egresos");
+            const egRows = []; let tNeto = 0, tAdmin = 0, tTot = 0; 
+            [...window.filteredData].sort((a,b)=>window.parseDateForSort(a.fecha)-window.parseDateForSort(b.fecha)).forEach(d => { 
+                const adminVal = d.costo * (fr / 100);
+                const tf = d.costo + adminVal; 
+                egRows.push([d.fecha, d.proveedor, d.descripcion, d.tipo, d.disciplina, d.estadoPago, formatCurrency(d.costo), formatCurrency(adminVal), formatCurrency(tf)]); 
+                tNeto += d.costo; tAdmin += adminVal; tTot += tf; 
+            }); 
+            egRows.push(["", "", "", "", "", "TOTALES:", formatCurrency(tNeto), formatCurrency(tAdmin), formatCurrency(tTot)]);
+            doc.autoTable({ 
+                startY: 30, head: [["Fecha", "Proveedor", "Descripción", "Tipo Gasto", "Área", "Estado", "Neto", "Admin", "Total"]], body: egRows, styles: {fontSize: 8}, 
+                headStyles: {fillColor: [225, 29, 72]}, columnStyles: { 6: {halign: 'right'}, 7: {halign: 'right'}, 8: {halign: 'right', fontStyle: 'bold'} }, 
+                willDrawCell: (d)=>{ 
+                    if(d.row.index===egRows.length-1) d.cell.styles.fillColor=[243,244,246]; 
+                    if(d.column.index===5 && d.cell.raw==='PENDIENTE') d.cell.styles.textColor=[220,38,38]; 
+                } 
+            });
+
+            if(deudasActivas.length > 0) {
+                doc.addPage('a4', 'landscape'); addHeader("Deudas Activas");
+                const deudasRows = []; let tDeudaDetalle = 0;
+                deudasActivas.sort((a,b)=>window.parseDateForSort(a.fecha)-window.parseDateForSort(b.fecha)).forEach(d => { 
+                    const pag = d.montoPagado !== undefined ? d.montoPagado : 0; 
+                    const tf = d.costo * mul; 
+                    const sld = (d.costo - pag) * mul; 
+                    deudasRows.push([d.fecha, d.proveedor, d.descripcion, formatCurrency(tf), formatCurrency(pag*mul), formatCurrency(sld)]); 
+                    tDeudaDetalle += sld; 
+                });
+                deudasRows.push(["", "", "", "", "TOTAL:", formatCurrency(tDeudaDetalle)]);
+                doc.autoTable({ 
+                    startY: 30, head: [["Fecha", "Proveedor", "Descripción", "Total", "Abonado", "Pendiente"]], body: deudasRows, styles: {fontSize: 8}, 
+                    headStyles: {fillColor: [220, 38, 38]}, columnStyles: { 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right', fontStyle: 'bold'} } 
+                });
+            }
+
+            doc.addPage('a4', 'landscape'); addHeader("Anexo Gráfico");
+            const addChartToDoc = (canvasId, title, x, y, w, h) => { 
+                const cvs = document.getElementById(canvasId); 
+                if(!cvs) return; 
+                const tc = document.createElement('canvas'); tc.width = cvs.width; tc.height = cvs.height; 
+                const cx = tc.getContext('2d'); cx.fillStyle = '#ffffff'; cx.fillRect(0,0,tc.width,tc.height); cx.drawImage(cvs,0,0); 
+                doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(title, x, y - 4); doc.addImage(tc.toDataURL('image/jpeg', 1.0), 'JPEG', x, y, w, h); 
+            };
+            addChartToDoc('trendChart', 'Evolución', 14, 40, 130, 65); 
+            addChartToDoc('deudaChart', 'Deuda Prov.', 155, 40, 100, 65); 
+            addChartToDoc('typeChart', 'Por Categoria', 14, 125, 130, 65); 
+            addChartToDoc('areaChart', 'Por Área', 155, 125, 130, 65);
+
+            doc.addPage('a4', 'landscape'); addHeader("Anexo Gráfico - Proveedores");
+            addChartToDoc('providerChart', 'Gastos por Proveedor', 14, 40, 269, 150);
+
+            doc.save(`${originalFileName.replace('.csv', '')}_Reporte_Maestro.pdf`);
+        };
+
+        window.exportFilteredExpensesPDF = async () => {
+            if(window.filteredData.length === 0) return window.showToast("No hay gastos filtrados para exportar", "error");
+            window.showToast("Generando Reporte de Gastos...", "success");
+            
+            const { jsPDF } = window.jspdf; const doc = new jsPDF('landscape');
+            const c = getTxt('companyName'), p = getTxt('projectName'), dateStr = new Date().toLocaleDateString();
+            const fr = parseFloat(getVal('adminFeeInput'))||0; const mul = 1+(fr/100);
+            
+            // Obtener filtros actuales para el encabezado
+            const fP = getVal('periodFilter') || 'ALL';
+            const fT = getVal('typeFilter') || 'ALL';
+            const fA = getVal('areaFilter') || 'ALL';
+            const fPr = getVal('providerFilter') || 'ALL';
+            const fE = getVal('estadoFilter') || 'ALL';
+            let filterDesc = `Periodo: ${fP} | Tipo: ${fT} | Área: ${fA} | Prov: ${fPr} | Estado: ${fE}`;
+
+            const addHeader = (title) => { 
+                doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(`${title} - ${c}`, 14, 15); 
+                doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.text(`Obra: ${p} | Fecha: ${dateStr}`, 14, 21); 
+                doc.setFontSize(8); doc.setFont("helvetica", "italic"); doc.setTextColor(100); doc.text(`Filtros aplicados: ${filterDesc}`, 14, 26);
+                doc.setTextColor(0);
+            };
+
+            addHeader("Detalle de Egresos Filtrados");
+            
+            const egRows = []; let tNeto = 0, tAdmin = 0, tTot = 0; 
+            [...window.filteredData].sort((a,b)=>window.parseDateForSort(a.fecha)-window.parseDateForSort(b.fecha)).forEach(d => { 
+                const adminVal = d.costo * (fr / 100);
+                const tf = d.costo + adminVal; 
+                egRows.push([d.fecha, d.proveedor, d.descripcion, d.tipo, d.disciplina, d.estadoPago, formatCurrency(d.costo), formatCurrency(adminVal), formatCurrency(tf)]); 
+                tNeto += d.costo; tAdmin += adminVal; tTot += tf; 
+            }); 
+            
+            // Añadir fila de honorarios si hay un porcentaje
+            if(fr > 0) {
+                const hTot = tNeto * (fr / 100);
+                egRows.push(["", "ADMINISTRACIÓN DELEGADA", `Honorarios sobre gastos (${fr}%)`, "HONORARIOS", "GENERAL", "N/A", formatCurrency(hTot), formatCurrency(hTot)]);
+                tTot += hTot;
+            }
+
+            egRows.push(["", "", "", "", "", "TOTALES:", formatCurrency(tNeto), formatCurrency(tAdmin), formatCurrency(tTot)]);
+            
+            doc.autoTable({ 
+                startY: 30, head: [["Fecha", "Proveedor", "Descripción", "Tipo Gasto", "Área", "Estado", "Neto", "Admin", "Total"]], body: egRows, styles: {fontSize: 8}, 
+                headStyles: {fillColor: [71, 85, 105]}, // Slate 600
+                columnStyles: { 6: {halign: 'right'}, 7: {halign: 'right'}, 8: {halign: 'right', fontStyle: 'bold'} }, 
+                willDrawCell: (d)=>{ 
+                    if(d.row.index === egRows.length - 1) d.cell.styles.fillColor = [243, 244, 246]; 
+                    if(d.row.index === egRows.length - (fr > 0 ? 2 : 1) && fr > 0) d.cell.styles.textColor = [79, 70, 229]; // Indigo para honorarios
+                    if(d.column.index === 5 && d.cell.raw === 'PENDIENTE') d.cell.styles.textColor = [220, 38, 38]; 
+                } 
+            });
+
+            doc.save(`${originalFileName.replace('.csv', '')}_Detalle_Gastos.pdf`);
+        };
+
+        window.exportSpecificChartToPDF = function(id, tit) {
+            const c=document.getElementById(id); if(!c)return; 
+            const tc=document.createElement('canvas'); tc.width=c.width; tc.height=c.height; 
+            const cx=tc.getContext('2d'); cx.fillStyle='#ffffff'; cx.fillRect(0,0,tc.width,tc.height); cx.drawImage(c,0,0);
+            const img=tc.toDataURL('image/jpeg',1.0); const { jsPDF } = window.jspdf; const doc = new jsPDF('landscape'); 
+            doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(tit, 14, 15); 
+            const pw=297-28; const ph=(doc.getImageProperties(img).height*pw)/doc.getImageProperties(img).width; 
+            doc.addImage(img,'JPEG',14,30,pw,ph); doc.save(`${tit.replace(/\s+/g,'_')}.pdf`); window.showToast("Exportado", "success");
+        };
+
+        window.exportToExcel = () => { 
+            if(window.rawData.length===0&&window.rawIngresos.length===0&&window.budgetData.length===0&&window.contratosData.length===0) return window.showToast("No hay datos","error"); 
+            const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(window.generateExportData()),"Datos"); 
+            XLSX.writeFile(wb,originalFileName.replace('.csv','.xlsx')); window.showToast("Excel Exportado", "success");
+        };
+
+        window.generateExportData = () => {
+            const c=getTxt('companyName'), p=getTxt('projectName'), fr=parseFloat(getVal('adminFeeInput'))||0, ar=parseFloat(getVal('inputAreaM2'))||100, ep=parseFloat(getVal('inputEstPriceM2'))||0; 
+            
+            const eI=window.rawIngresos.map(d=>({
+                "CLASE": "INGRESO", "ESTADO": "PAGADO", "FECHA": d.fecha, "MES": d.mes, "SEMANA": d.semana, "TIPO": "INGRESO", "AREA": "N/A", "PROVEEDOR": d.origen, 
+                "DESCRIPCION": d.descripcion, "FORMA DE PAGO": d.formaPago, "MONEDA": d.moneda, "TASA": d.tasa, "MONTO ORIG": d.monto, "MONTO BASE USD": d.montoUSD, 
+                "MONTO PAGADO": d.montoUSD, "SALDO PENDIENTE": 0, "% ADMIN": 0, "HONORARIOS": 0, "COSTO TOTAL": d.montoUSD, "EMPRESA": c, "OBRA": p, "AREA M2": ar, "ESTIMADO": ep, "LINK FACTURA": "", "LINK COMPROBANTE": d.linkComprobante
+            })); 
+            
+            const eG=window.rawData.map(d=> { 
+                const pagado = d.estadoPago === 'PAGADO' ? d.costo : (d.montoPagado || 0); 
+                return {
+                    "CLASE": "GASTO", "ESTADO": d.estadoPago||"PAGADO", "FECHA": d.fecha, "MES": d.mes, "SEMANA": d.semana, "TIPO": d.tipo, "AREA": d.disciplina, 
+                    "PROVEEDOR": d.proveedor, "DESCRIPCION": d.descripcion, "FORMA DE PAGO": d.formaPago, "MONEDA": d.moneda||"USD", "TASA": d.tasa||1, 
+                    "MONTO ORIG": d.montoOriginal||d.costo, "MONTO BASE USD": d.costo, "MONTO PAGADO": pagado, "SALDO PENDIENTE": Math.max(0, d.costo - pagado), "% ADMIN": fr, 
+                    "HONORARIOS": d.costo*(fr/100), "COSTO TOTAL": d.costo*(1+fr/100), "EMPRESA": c, "OBRA": p, "AREA M2": ar, "ESTIMADO": ep, "LINK FACTURA": d.linkFactura, "LINK COMPROBANTE": d.linkComprobante
+                }; 
+            }); 
+            
+            const eB=window.budgetData.map(d=>({
+                "CLASE": "PRESUPUESTO", "ESTADO": "N/A", "FECHA": d.fecha||new Date().toISOString().split('T')[0], "MES": "N/A", "SEMANA": "N/A", 
+                "TIPO": "PRESUPUESTO", "AREA": d.disciplina, "PROVEEDOR": "N/A", "DESCRIPCION": "Presupuesto", "FORMA DE PAGO": "N/A", "MONEDA": "USD", 
+                "TASA": 1, "MONTO ORIG": d.montoUSD, "MONTO BASE USD": d.montoUSD, "MONTO PAGADO": d.montoUSD, "SALDO PENDIENTE": 0, "% ADMIN": 0, "HONORARIOS": 0, 
+                "COSTO TOTAL": d.montoUSD, "EMPRESA": c, "OBRA": p, "AREA M2": ar, "ESTIMADO": ep, "LINK FACTURA": "", "LINK COMPROBANTE": ""
+            })); 
+            
+            const eC=window.contratosData.map(d=>({
+                "CLASE": "CONTRATO", "ESTADO": "N/A", "FECHA": d.fecha||new Date().toISOString().split('T')[0], "MES": "N/A", "SEMANA": "N/A", 
+                "TIPO": "CONTRATO", "AREA": "N/A", "PROVEEDOR": d.proveedor, "DESCRIPCION": d.descripcion, "FORMA DE PAGO": "N/A", "MONEDA": "USD", 
+                "TASA": 1, "MONTO ORIG": d.montoUSD, "MONTO BASE USD": d.montoUSD, "MONTO PAGADO": 0, "SALDO PENDIENTE": d.montoUSD, "% ADMIN": 0, "HONORARIOS": 0, 
+                "COSTO TOTAL": d.montoUSD, "EMPRESA": c, "OBRA": p, "AREA M2": ar, "ESTIMADO": ep, "LINK FACTURA": "", "LINK COMPROBANTE": ""
+            })); 
+            
+            return [...eI,...eG,...eB,...eC]; 
+        };
+        
+        window.exportToCSV = () => { 
+            if(window.rawData.length===0&&window.rawIngresos.length===0&&window.budgetData.length===0&&window.contratosData.length===0) return window.showToast("No hay datos", "error"); 
+            const b=new Blob(["\uFEFF"+Papa.unparse(window.generateExportData())],{type:'text/csv;charset=utf-8;'}); 
+            const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=originalFileName; a.click(); window.showToast("CSV Exportado", "success");
+        };
+
+        // MIGRACIÓN MÁGICA (BULK PASTE)
+        window.switchBulkTab = (tab) => {
+            const isGasto = tab === 'gasto';
+            document.getElementById('bulkGastoPanel').classList.toggle('hidden', !isGasto);
+            document.getElementById('bulkIngresoPanel').classList.toggle('hidden', isGasto);
+            document.getElementById('tabGasto').className = isGasto ? 'flex-1 py-2 rounded-md font-bold text-sm transition bg-white text-purple-700 shadow-sm' : 'flex-1 py-2 rounded-md font-bold text-sm transition text-gray-500 hover:bg-gray-200';
+            document.getElementById('tabIngreso').className = !isGasto ? 'flex-1 py-2 rounded-md font-bold text-sm transition bg-white text-purple-700 shadow-sm' : 'flex-1 py-2 rounded-md font-bold text-sm transition text-gray-500 hover:bg-gray-200';
+            document.getElementById('bulkPreview').textContent = '';
+        };
+
+        window.processBulkPaste = () => {
+            const isGasto = !document.getElementById('bulkGastoPanel').classList.contains('hidden');
+            const input = document.getElementById(isGasto ? 'bulkGastoInput' : 'bulkIngresoInput').value.trim();
+            if(!input) return window.showToast("No hay datos para procesar", "error");
+
+            const normalizeDate = (s) => { 
+                if(!s) return ''; let p=s.trim().split(' ')[0]; 
+                if(/^\d+$/.test(p)){let d=new Date((parseInt(p)-25569)*86400000);return !isNaN(d)?d.toISOString().split('T')[0]:p;} 
+                if(p.includes('/')){let x=p.split('/'); if(x.length===3) return x[2].length===4?`${x[2]}-${x[1].padStart(2,'0')}-${x[0].padStart(2,'0')}`:`${x[0]}-${x[1].padStart(2,'0')}-${x[2].padStart(2,'0')}`;} 
+                if(p.includes('-')){let x=p.split('-'); if(x.length===3) return x[0].length===4?`${x[0]}-${x[1].padStart(2,'0')}-${x[2].padStart(2,'0')}`:`${x[2]}-${x[1].padStart(2,'0')}-${x[0].padStart(2,'0')}`;} 
+                try{let d=new Date(p);if(!isNaN(d))return d.toISOString().split('T')[0];}catch(e){} return p; 
+            };
+
+            const rows = input.split('\n').map(r => r.split('\t'));
+            const globalFee = parseFloat(document.getElementById('adminFeeInput').value) || 0;
+            let count = 0;
+
+            rows.forEach(r => {
+                if(r.length < 3) return; 
+                const uniqueId = (isGasto ? 'tx_' : 'ing_') + Math.random().toString(36).substr(2, 9);
+                
+                const fecha = normalizeDate(r[0]);
+                const mes = window.getMonthYearFromDate(fecha);
+                const sem = window.getWeekYearFromDate(fecha);
+
+                if(isGasto) {
+                    const tipo = (r[1] || 'NO ESPECIFICADO').toUpperCase().trim();
+                    const area = (r[2] || 'NO ESPECIFICADO').toUpperCase().trim();
+                    const prov = (r[3] || 'DESCONOCIDO').toUpperCase().trim();
+                    const desc = (r[4] || 'Sin descripción').trim();
+                    const mOrig = parseFloat(String(r[5] || '0').replace(/[^0-9.]/g,'')) || 0;
+                    const tasa = parseFloat(String(r[6] || '1').replace(/[^0-9.]/g,'')) || 1;
+                    
+                    let estRaw = (r[8] || 'PAGADO').toUpperCase().trim();
+                    let est = 'PAGADO';
+                    if (estRaw.includes('PEND') || estRaw.includes('DEUDA') || estRaw.includes('POR PAGAR')) est = 'PENDIENTE';
+
+                    const pag = (r[9] || '').toUpperCase().trim();
+                    const costoBaseUSD = (tasa > 0) ? mOrig / tasa : mOrig;
+                    
+                    window.rawData.push({
+                        id: uniqueId, 
+                        fecha: fecha,
+                        mes: mes, 
+                        semana: sem, 
+                        tipo: correccionesTipo[tipo] || tipo, 
+                        disciplina: area, 
+                        proveedor: prov, 
+                        descripcion: desc, 
+                        moneda: (tasa > 1.01 ? 'VES' : 'USD'), 
+                        tasa: tasa, 
+                        montoOriginal: mOrig, 
+                        costo: costoBaseUSD, 
+                        montoPagado: (est === 'PAGADO' ? costoBaseUSD : 0), 
+                        formaPago: pag, 
+                        linkFactura: '', 
+                        linkComprobante: '', 
+                        estadoPago: est
+                    });
+                } else {
+                    const orig = (r[1] || 'DESCONOCIDO').toUpperCase().trim();
+                    const desc = (r[2] || 'Sin descripción').trim();
+                    const mOrig = parseFloat(String(r[3] || '0').replace(/[^0-9.]/g,'')) || 0;
+                    const tasa = parseFloat(String(r[4] || '1').replace(/[^0-9.]/g,'')) || 1;
+                    const pag = (r[5] || '').toUpperCase().trim();
+                    const mUSD = (tasa > 0) ? mOrig / tasa : mOrig;
+
+                    window.rawIngresos.push({
+                        id: uniqueId, 
+                        fecha: fecha, 
+                        mes: mes, 
+                        semana: sem, 
+                        origen: orig, 
+                        descripcion: desc, 
+                        moneda: (tasa > 1.01 ? 'VES' : 'USD'), 
+                        monto: mOrig, 
+                        tasa: tasa, 
+                        montoUSD: mUSD, 
+                        formaPago: pag, 
+                        linkComprobante: '', 
+                        estadoPago: 'PAGADO'
+                    });
+                }
+                count++;
+            });
+
+            if(count > 0) {
+                window.showToast(`${count} registros insertados`, "success");
+                window.populateFilters(); window.applyFilters(); window.backupLocal();
+                window.closeM('bulkPasteModal');
+                document.getElementById('bulkGastoInput').value = '';
+                document.getElementById('bulkIngresoInput').value = '';
+            } else {
+                window.showToast("No se detectaron datos válidos", "error");
+            }
+        };
+
+        // INICIALIZADOR GLOBAL (Llamado al final)
+        window.initMaestro();
+
+    </script>
+</body>
+</html>
